@@ -1,0 +1,22 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+
+[packages]
+
+sanic = "*"
+python-dotenv = "*"
+uwsgi = "*"
+gunicorn = "*"
+aiohttp = "*"
+aiohttp-wsgi = "*"
+aioredis = "*"
+docopt = "*"
+pygithub = "*"
+
+
+[dev-packages]
+
