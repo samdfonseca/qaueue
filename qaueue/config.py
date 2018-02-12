@@ -24,8 +24,9 @@ class Config(object):
 
     @classmethod
     def channel_command_enabled(cls, channel: str, command: str) -> bool:
-        return command in cls.ENABLED_CHANNEL_COMMANDS.get(channel,
+        enabled_channel_commands = cls.ENABLED_CHANNEL_COMMANDS.get(channel,
                 cls.ENABLED_CHANNEL_COMMANDS.get('*'))
+        return (enabled_channel_commands == '*' or command in enabled_channel_commands)
 
     @classmethod
     def get_channels_command_enabled(cls, command: str) -> typing.List[str]:

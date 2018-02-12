@@ -7,15 +7,12 @@ name = "pypi"
 
 [packages]
 
-sanic = "*"
 python-dotenv = "*"
-uwsgi = "*"
 gunicorn = "*"
 aiohttp = "*"
-aiohttp-wsgi = "*"
 aioredis = "*"
 docopt = "*"
-pygithub = "*"
+PyGithub = "*"
 
 
 [dev-packages]

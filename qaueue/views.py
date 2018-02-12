@@ -23,15 +23,14 @@ QAueue: /qaueue manages the items in the QA pipeline
 
 Usage:
     /qaueue add <item>...
-    /qaueue help [<help_command>]
-    /qaueue list
+    /qaueue [-v] help [<help_command>]
+    /qaueue [-v] list
     /qaueue prioritize <prioritize_item_id> <priority_index>
     /qaueue remove <remove_item_id>...
     /qaueue update <update_item_id> <status>
 
 Options:
     -v --verbose    Make the output of the command visible to the channel
-    -h --help       Show help text for a command
 '''
 
 
@@ -80,12 +79,9 @@ class item_types:
     OTHER = 'other'
 
 
-def parse_flags(args: list) -> list:
-    flags = []
-    for i in range(len(args), 0, -1):
-        if args[i-1].startswith('-'):
-            flags.append(args.pop(i-1))
-    return flags
+def parse_args(args: typing.List[str], usage: str = None) -> dict:
+    usage = usage or USAGE
+    return docopt.docopt(usage, argv=args)
 
 
 def json_resp(body) -> web.Response:
@@ -116,7 +112,7 @@ async def usage_help(args: dict) -> web.Response:
             'remove': remove_items,
             'update': set_item_status,
             }
-    response_type = ('in_channel' if args.get('verbose') else 'ephemeral')
+    response_type = ('in_channel' if args.get('--verbose') else 'ephemeral')
     command = args.get('<help_command>')
     if command is None:
         return json_resp({
@@ -146,7 +142,7 @@ async def usage_help(args: dict) -> web.Response:
 
 async def list_queue(conn: RedisConnection, args: dict, config: Config) -> web.Response:
     '''/qaueue list: lists the items in the pipeline and their current status'''
-    is_verbose = args.get('verbose', False)
+    is_verbose = args.get('--verbose', False)
     response_type = ('in_channel' if is_verbose else 'ephemeral')
     if args.get('help', False):
         return json_resp({
@@ -377,15 +373,6 @@ async def remove_items(conn: aioredis.Redis, args: dict, config: Config) -> web.
     return json_resp(body)
 
 
-async def item_status(conn: aioredis.Redis, args: list, config: Config) -> web.Response:
-    flags = parse_flags(args)
-    assert len(args) == 1 or len(args) == 2
-    if len(args) == 1:
-        return await get_item_status(conn, args[0], flags)
-    if len(args) == 2:
-        return await set_item_status(conn, args[0], args[1], flags)
-
-
 async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
     is_verbose = args.get('verbose', False)
     attachments = []
@@ -506,7 +493,7 @@ async def index(request: web.Request):
     channel_name = data.get('channel_name')
     argv = data.get('text', 'help').split(' ')
     args = docopt.docopt(USAGE, argv=argv)
-    args.setdefault('verbose', False)
+    args.setdefault('--verbose', False)
     if args.get('add'):
         if config.channel_command_enabled(channel_name, 'add'):
             return await add_items(conn, args, config)
