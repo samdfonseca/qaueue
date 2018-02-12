@@ -6,7 +6,6 @@ from aiohttp import web
 from dotenv import load_dotenv, find_dotenv
 
 
-load_dotenv(find_dotenv(), override=True)
 app = web.Application()
 
 
@@ -21,6 +20,7 @@ async def auth_middleware(app: web.Application, handler):
 
 
 def init_func(argv):
+    load_dotenv(find_dotenv(), override=True)
     app = web.Application()
     app['config'] = conf
     app.middlewares.append(auth_middleware)
@@ -31,6 +31,7 @@ def init_func(argv):
 
 
 if __name__ == '__main__':
+    load_dotenv(find_dotenv(), override=True)
     app['config'] = conf
     app.middlewares.append(auth_middleware)
     app.on_startup.append(init_redis)
