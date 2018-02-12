@@ -9,7 +9,6 @@ ADD . /app/
 
 WORKDIR /app
 
-RUN pip install pipenv \
-  && pipenv install --ignore-pipfile --system
+RUN pip install -r requirements.txt
 
 CMD [ "./run.sh" ]
