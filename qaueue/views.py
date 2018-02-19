@@ -356,14 +356,10 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
     for item_id in item_ids:
         exists = await conn.exists(item_id)
         if exists == 0:
-            attachments.append(slack_message_body(args, **{
-                'attachments': [
-                    attachment({
-                        'color': colors.RED,
-                        'text': '{item_id} does not exist',
-                        }),
-                    ],
-                }))
+            attachments.append(attachment({
+                'color': colors.RED,
+                'text': '{item_id} does not exist',
+            }))
             continue
         status = await conn.hget(item_id, fields.STATE)
         item_type = await conn.hget(item_id, fields.TYPE)
@@ -375,25 +371,17 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
             msg_fields.append({'title': 'Released At', 'value': released_at, 'short': True})
         if item_type in [item_types.GITHUB_PUlL_REQUEST, item_types.PIVOTAL_STORY]:
             item_url = await conn.hget(item_id, fields.URL)
-            attachments.append(slack_message_body(args, **{
-                'attachments': [
-                    attachment({
-                        'title': item_id,
-                        'title_link': item_url,
-                        'fields': msg_fields,
-                        }),
-                    ]
-                }))
+            attachments.append(attachment({
+                'title': item_id,
+                'title_link': item_url,
+                'fields': msg_fields,
+            }))
         else:
             item_value = await conn.hget(item_id, fields.VALUE)
-            attachments.append(slack_message_body(args, **{
-                'attachments': [
-                    attachment({
-                        'text': item_value,
-                        'fields': msg_fields,
-                        }),
-                    ]
-                }))
+            attachments.append(attachment({
+                'text': item_value,
+                'fields': msg_fields,
+            }))
     body = slack_message_body(args, **{
         'text': 'Item Statuses',
         'attachments': attachments,
