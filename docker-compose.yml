@@ -1,0 +1,20 @@
+version: '2'
+services:
+  redis:
+    container_name: qaueue-redis
+    image: launcher.gcr.io/google/redis4
+    ports:
+      - '6379:6379'
+    volumes:
+      - ${REDIS_DATA_DIR}:/data
+  qaueue-server:
+    container_name: qaueue-server
+    image: gcr.io/natural-metric-186218/qaueue:latest
+    ports:
+      - '8889:8889'
+    environment:
+      - SLACK_VERIFICATION_TOKEN
+      - PIVOTAL_PROJECT_IDS
+      - PIVOTAL_API_TOKEN
+      - GITHUB_ACCESS_TOKEN
+      - REDIS_ADDRESS
