@@ -464,7 +464,7 @@ async def prioritize_item(conn: aioredis.Redis, args: dict, config: Config) -> w
         }))
 
 
-def channel_command_not_enabled(channel: str, command: str, enabled_channels: typing.List[str] = None) -> web.Response:
+def channel_command_not_enabled(args: dict, channel: str, command: str, enabled_channels: typing.List[str] = None) -> web.Response:
     err_msg = f'Command is not enabled in #{channel}'
     if len(enabled_channels) > 0:
         err_msg += '. Use one of the following channels: ' + ', '.join([f'#{c}' for c in enabled_channels])
@@ -495,5 +495,5 @@ async def index(request: web.Request):
         cmd, func = commands.default()
     if config.channel_command_enabled(channel_name, cmd):
         return await func()
-    return channel_command_not_enabled(channel_name, cmd, config.get_channels_command_enabled(cmd))
+    return channel_command_not_enabled(args, channel_name, cmd, config.get_channels_command_enabled(cmd))
 
