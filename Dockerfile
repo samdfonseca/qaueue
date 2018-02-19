@@ -10,6 +10,7 @@ ADD . /app/
 
 WORKDIR /app
 
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt \
+  && pip install .
 
 CMD [ "./run.sh" ]
