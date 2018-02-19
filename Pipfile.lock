@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "32e74083117fb071ef01443ab773acf5cb42b6b6496f64068e1f51aa5e077d00"
+            "sha256": "f9394b0eef6cefeb5c7d645e122bb1ca7455ce7d7dec51765058cd3fe52a17dc"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -88,6 +88,13 @@
             ],
             "version": "==0.6.2"
         },
+        "fakeredis": {
+            "hashes": [
+                "sha256:31a786029156847f5a9a2ae50eac17689ebd7ce373dbbb51862f5b8ee92cadef",
+                "sha256:445b9bd847f41c6df2c9438e49bf54e96323fb1809a3039b20969e2c67870b04"
+            ],
+            "version": "==0.9.0"
+        },
         "gunicorn": {
             "hashes": [
                 "sha256:75af03c99389535f218cc596c7de74df4763803f7b63eb09d77e92b3956b36c6",
@@ -141,6 +148,19 @@
             ],
             "version": "==4.1.0"
         },
+        "pluggy": {
+            "hashes": [
+                "sha256:7f8ae7f5bdf75671a718d2daf0a64b7885f74510bcd98b1a0bb420eb9a9d0cff"
+            ],
+            "version": "==0.6.0"
+        },
+        "py": {
+            "hashes": [
+                "sha256:8cca5c229d225f8c1e3085be4fcf306090b00850fefad892f9d96c7b6e2f310f",
+                "sha256:ca18943e28235417756316bfada6cd96b23ce60dd532642690dcfdaba988a76d"
+            ],
+            "version": "==1.5.2"
+        },
         "pygithub": {
             "hashes": [
                 "sha256:b6c1c0c1305b879b6c40b2ba957914b8ad26cd4549ac7a5e21339a0af0307b43"
@@ -153,6 +173,20 @@
                 "sha256:500be75b17a63f70072416843dc80c8821109030be824f4d14758f114978bae7"
             ],
             "version": "==1.5.3"
+        },
+        "pytest": {
+            "hashes": [
+                "sha256:95fa025cd6deb5d937e04e368a00552332b58cae23f63b76c8c540ff1733ab6d",
+                "sha256:6074ea3b9c999bd6d0df5fa9d12dd95ccd23550df2a582f5f5b848331d2e82ca"
+            ],
+            "version": "==3.4.0"
+        },
+        "pytest-aiohttp": {
+            "hashes": [
+                "sha256:0b9b660b146a65e1313e2083d0d2e1f63047797354af9a28d6b7c9f0726fa33d",
+                "sha256:c929854339637977375838703b62fef63528598bc0a9d451639eba95f4aaa44f"
+            ],
+            "version": "==0.3.0"
         },
         "python-dotenv": {
             "hashes": [

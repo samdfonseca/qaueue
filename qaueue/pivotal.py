@@ -52,7 +52,7 @@ async def _get_story(project_id: PivotalId, story_id: PivotalId) -> dict:
     story_id = str(story_id)
     url = f'{PIVOTAL_BASE_URL}/projects/{project_id}/stories/{story_id}'
     headers = {
-            'X-TrackerToken': Config.PIVOTAL_API_TOKEN,
+            'X-TrackerToken': Config().PIVOTAL_API_TOKEN,
             }
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
@@ -63,7 +63,7 @@ async def _get_story(project_id: PivotalId, story_id: PivotalId) -> dict:
 
 async def get_story(story_id: PivotalId,
         possible_project_ids: typing.Optional[typing.Union[PivotalId, typing.List[PivotalId]]] = None) -> dict:
-    possible_project_ids = possible_project_ids or Config.PIVOTAL_PROJECT_IDS
+    possible_project_ids = possible_project_ids or Config().PIVOTAL_PROJECT_IDS
     if isinstance(possible_project_ids, str) or isinstance(possible_project_ids, int):
         possible_project_ids = [possible_project_ids]
     for project_id in possible_project_ids:

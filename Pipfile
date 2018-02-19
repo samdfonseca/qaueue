@@ -15,6 +15,9 @@ docopt = "*"
 pygithub = "*"
 redis = "*"
 redis-collections = "*"
+pytest = "*"
+pytest-aiohttp = "*"
+fakeredis = "*"
 
 
 [dev-packages]

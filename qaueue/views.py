@@ -124,8 +124,8 @@ async def list_queue(conn: aioredis.Redis, args: dict, config: Config) -> web.Re
                 attachment({'text': list_queue.__doc__}),
                 ],
             }))
-    queue_len = await conn.execute('llen', QUEUE_KEY)
-    queued_item_ids = await conn.execute('lrange', QUEUE_KEY, 0, -1)
+    queue_len = await conn.llen(QUEUE_KEY)
+    queued_item_ids = await conn.lrange(QUEUE_KEY, 0, -1)
     attachments = []
     for i, item_id in enumerate(queued_item_ids):
         item_type = await conn.hget(item_id, fields.TYPE)
@@ -173,7 +173,7 @@ async def _add_pivotal_story(conn: aioredis.Redis, story_project_ids: typing.Tup
     if project_id is not None:
         story = await pivotal.get_story(story_id, project_id)
     else:
-        story = await pivotal.get_story(story_id)
+        story = await pivotal.get_story(story_id, config.PIVOTAL_PROJECT_IDS)
     story_url = story.get('url', f'https://www.pivotaltracker.com/story/show/{story_id}')
     item_id = f'PT/{story_id}'
     story_name = story.get('name')

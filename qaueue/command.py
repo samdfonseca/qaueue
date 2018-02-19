@@ -54,8 +54,8 @@ class Commands(object):
                 if arg_name == 'return':
                     continue
                 arg = self._kwargs.get(arg_name)
-                if not isinstance(arg, arg_type):
-                    raise ArgTypeAnnotationMismatchError(arg_name, arg_type, type(arg))
+                # if not isinstance(arg, arg_type):
+                #     raise ArgTypeAnnotationMismatchError(arg_name, arg_type, type(arg))
                 args.append(arg)
             return func(*args)
         return wrapper

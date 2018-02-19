@@ -31,10 +31,14 @@ class Config(object):
     PIVOTAL_PROJECT_IDS = os.environ.get('PIVOTAL_PROJECT_IDS')
     GITHUB_ACCESS_TOKEN = os.environ.get('GITHUB_ACCESS_TOKEN')
 
-    def __init__(self):
-        redis_address = object.__getattribute__(self, 'REDIS_ADDRESS')
-        redis_db = object.__getattribute__(self, 'REDIS_DB')
-        redis_conn = redis.from_url(redis_address, redis_db, encoding='utf-8')
+    def __init__(self, redis_conn: Redis = None, read_only: bool = True):
+        if redis_conn is None:
+            redis_address = object.__getattribute__(self, 'REDIS_ADDRESS')
+            redis_db = object.__getattribute__(self, 'REDIS_DB')
+            redis_conn = redis.from_url(redis_address, redis_db, encoding='utf-8')
+        object.__setattr__(self, 'redis_conn', redis_conn)
+        if read_only:
+            return
         cls = object.__getattribute__(self, '__class__')
         attrs = filter(lambda attr: not callable(getattr(cls, attr)) and not attr.startswith('_'), dir(cls))
         for attr in attrs:
@@ -42,7 +46,6 @@ class Config(object):
             if isinstance(val, (list, dict)):
                 val = json.dumps(val)
             redis_conn.hset('CONFIG', attr, val)
-        object.__setattr__(self, 'redis_conn', redis_conn)
 
     def channel_command_enabled(self, channel: str, command: str) -> bool:
         enabled_channel_commands = self.ENABLED_CHANNEL_COMMANDS.get(channel,
