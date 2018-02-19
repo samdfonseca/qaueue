@@ -1,4 +1,4 @@
-version: '2'
+version: '3'
 services:
   redis:
     container_name: qaueue-redis
@@ -7,7 +7,7 @@ services:
       - '6379:6379'
     volumes:
       - ${REDIS_DATA_DIR}:/data
-  qaueue-server:
+  app:
     container_name: qaueue-server
     image: gcr.io/natural-metric-186218/qaueue:latest
     ports:
