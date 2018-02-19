@@ -1,6 +1,6 @@
 import os
 
-from .config import Config as conf
+from .config import Config
 from .redis import close_redis, init_redis
 from .routes import setup_routes
 
@@ -14,18 +14,19 @@ dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
 
 async def auth_middleware(app: web.Application, handler):
     async def middleware_handler(request):
+        conf: Config  = app['config']
         data = await request.post()
         if data.get('token') == conf.SLACK_VERIFICATION_TOKEN:
             response = await handler(request)
             return response
-        raise web.HTTPForbidden
+        raise web.HTTPForbidden(body='Token mismatch')
     return middleware_handler
 
 
 def init_func(argv):
     load_dotenv(dotenv_path)
     app = web.Application()
-    app['config'] = conf()
+    app['config'] = Config()
     app.middlewares.append(auth_middleware)
     app.on_startup.append(init_redis)
     app.on_cleanup.append(close_redis)

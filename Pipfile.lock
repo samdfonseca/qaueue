@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "7c02021266dcb9d722202dadda8aa49b1af9e523b90662eccbd98efc40bb1db5"
+            "sha256": "32e74083117fb071ef01443ab773acf5cb42b6b6496f64068e1f51aa5e077d00"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -160,6 +160,26 @@
                 "sha256:45e927c34204c90f5faa35ea8709b894f6b1a7712d77eb50940601068040993b"
             ],
             "version": "==0.7.1"
+        },
+        "redis": {
+            "hashes": [
+                "sha256:8a1900a9f2a0a44ecf6e8b5eb3e967a9909dfed219ad66df094f27f7d6f330fb",
+                "sha256:a22ca993cea2962dbb588f9f30d0015ac4afcc45bee27d3978c0dbe9e97c6c0f"
+            ],
+            "version": "==2.10.6"
+        },
+        "redis-collections": {
+            "hashes": [
+                "sha256:3a9cd1577c7fc7bab4d488532440773e71b97526e768ea81378eb325a2765ca7"
+            ],
+            "version": "==0.4.2"
+        },
+        "six": {
+            "hashes": [
+                "sha256:832dc0e10feb1aa2c68dcc57dbb658f1c7e65b9b61af69048abc87a2db00a0eb",
+                "sha256:70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9"
+            ],
+            "version": "==1.11.0"
         },
         "yarl": {
             "hashes": [

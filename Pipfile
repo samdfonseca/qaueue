@@ -12,7 +12,9 @@ gunicorn = "*"
 aiohttp = "*"
 aioredis = "*"
 docopt = "*"
-PyGithub = "*"
+pygithub = "*"
+redis = "*"
+redis-collections = "*"
 
 
 [dev-packages]

@@ -109,3 +109,4 @@ venv.bak/
 app.yaml
 .idea
 nginx
+release.sh
