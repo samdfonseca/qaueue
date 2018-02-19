@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import hashlib
 import json
 import re
@@ -66,6 +67,7 @@ class fields:
     TYPE = 'type'
     NAME = 'name'
     URL = 'url'
+    RELEASED_AT = 'released_at'
 
 
 class states:
@@ -332,14 +334,14 @@ async def remove_items(conn: aioredis.Redis, args: dict, config: Config) -> web.
                 }))
         else:
             attachments.append(attachment({
-                'fallback': f'Added to queue: {removed_item.item}',
+                'fallback': f'Removed item: {removed_item.item}',
                 'text': (removed_item.name or removed_item.item),
                 'title': removed_item.item_id,
                 'title_link': removed_item.item,
                 }))
     body = slack_message_body(args, **{
         'text': 'Removed Items',
-        'attachments': (attachments or [attachment({'text': 'No added items'})]),
+        'attachments': (attachments or [attachment({'text': 'No Items Removed'})]),
         })
     return json_resp(body)
 
@@ -365,6 +367,12 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
             continue
         status = await conn.hget(item_id, fields.STATE)
         item_type = await conn.hget(item_id, fields.TYPE)
+        msg_fields = [
+            {'title': 'Status', 'value': status, 'short': True},
+        ]
+        if status == states.COMPLETED:
+            released_at = await conn.hget(item_id, fields.RELEASED_AT)
+            msg_fields.append({'title': 'Released At', 'value': released_at, 'short': True})
         if item_type in [item_types.GITHUB_PUlL_REQUEST, item_types.PIVOTAL_STORY]:
             item_url = await conn.hget(item_id, fields.URL)
             attachments.append(slack_message_body(args, **{
@@ -372,9 +380,7 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
                     attachment({
                         'title': item_id,
                         'title_link': item_url,
-                        'fields': [
-                            {'title': 'Status', 'value': status, 'short': True},
-                            ]
+                        'fields': msg_fields,
                         }),
                     ]
                 }))
@@ -384,9 +390,7 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
                 'attachments': [
                     attachment({
                         'text': item_value,
-                        'fields': [
-                            {'title': 'Status', 'value': status, 'short': True},
-                            ]
+                        'fields': msg_fields,
                         }),
                     ]
                 }))
@@ -395,6 +399,13 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
         'attachments': attachments,
         })
     return json_resp(body)
+
+
+async def _complete_item(conn: aioredis.Redis, item: str, config: Config):
+    item_type = await conn.hget(item, fields.TYPE)
+    if item_type == item_types.PIVOTAL_STORY:
+        item_url = await conn.hget(item, fields.URL)
+        label = await pivotal.add_rc_label_to_story(item_url)
 
 
 @qaueue_command('update')
@@ -412,7 +423,9 @@ async def set_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
     futs = []
     if new_status == states.COMPLETED:
         futs.append(tr.lrem(QUEUE_KEY, 0, item_id))
+        await _complete_item(conn, item_id, config)
     futs.append(tr.hset(item_id, fields.STATE, new_status))
+    futs.append(tr.hset(item_id, fields.RELEASED_AT, datetime.now().isoformat()))
     res1 = await tr.execute()
     res2 = await asyncio.gather(*futs)
     assert res1 == res2

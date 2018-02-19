@@ -26,7 +26,7 @@ async def auth_middleware(app: web.Application, handler):
 def init_func(argv):
     load_dotenv(dotenv_path)
     app = web.Application()
-    app['config'] = Config()
+    app['config'] = Config(read_only=False)
     app.middlewares.append(auth_middleware)
     app.on_startup.append(init_redis)
     app.on_cleanup.append(close_redis)

@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 import typing
 from urllib.parse import urljoin
@@ -13,6 +14,10 @@ PIVOTAL_FULL_STORY_URL_REGEX = ('^https:\/\/www\.pivotaltracker\.com\/n\/'
                                 'projects\/(?P<project_id>[0-9]{7})\/stories\/(?P<story_id>[0-9]{9})$')
 
 PivotalId = typing.Union[str, int]
+
+
+def story_url(project_id: PivotalId, story_id: PivotalId) -> str:
+    return f'{PIVOTAL_BASE_URL}/projects/{project_id}/stories/{story_id}'
 
 
 def is_short_story_url(url: str) -> bool:
@@ -40,8 +45,9 @@ def get_project_story_ids_from_full_url(url: str) -> typing.Tuple[str, str]:
 
 
 def get_story_id_from_url(url: str) -> str:
+    sid = None
     if is_full_story_url(url):
-        pid, sid = get_project_story_ids_from_full_url(url)
+        _, sid = get_project_story_ids_from_full_url(url)
     if is_short_story_url(url):
         sid = get_story_id_from_short_url(url)
     return sid
@@ -71,3 +77,31 @@ async def get_story(story_id: PivotalId,
         if resp is not None:
             return resp
 
+
+async def add_label_to_story(story_ref, label: str) -> dict:
+    conf = Config()
+    story_id = get_story_id_from_url(story_ref)
+    if story_id is None:
+        story_id = story_ref
+    project_id = (await get_story(story_id, conf.PIVOTAL_PROJECT_IDS)).get('project_id')
+    headers = {
+        'X-TrackerToken': conf.PIVOTAL_API_TOKEN,
+    }
+    body = {'name': label}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f'{PIVOTAL_BASE_URL}/projects/{project_id}/labels', headers=headers) as resp:
+            for existing_label in await resp.json():
+                if existing_label.get('name') == label:
+                    body.pop('name')
+                    body['id'] = existing_label.get('id')
+                    break
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{PIVOTAL_BASE_URL}/projects/{project_id}/stories/{story_id}/labels',
+                                headers=headers, json=body) as resp:
+            assert resp.status == 200
+            return await resp.json()
+
+
+async def add_rc_label_to_story(story_ref, label: str = None) -> dict:
+    label = 'rc-{}'.format(datetime.today().strftime('%Y-%m-%d'))
+    return await add_label_to_story(story_ref, label)
