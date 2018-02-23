@@ -3,7 +3,9 @@ import re
 import typing
 from urllib.parse import urljoin
 
-from .config import Config
+from qaueue import db
+from qaueue.config import Config
+from qaueue.constants import fields, item_types, statuses
 
 import aiohttp
 
@@ -76,6 +78,20 @@ async def get_story(story_id: PivotalId,
         resp = await _get_story(project_id, story_id)
         if resp is not None:
             return resp
+
+
+async def get_story_item(story_id: PivotalId,
+    possible_project_ids: typing.Optional[typing.Union[PivotalId, typing.List[PivotalId]]] = None) -> db.Item:
+    item_id = f'PT/{story_id}'
+    if await db.Item.exists(item_id):
+        return await db.Item.get(item_id)
+    resp = await get_story(story_id, possible_project_ids)
+    status = statuses.INITIAL
+    value = resp.get('url')
+    type = item_types.PIVOTAL_STORY
+    name = resp.get('name')
+    url = value
+    return db.Item(item_id=item_id, status=status, value=value, type=type, name=name, url=url)
 
 
 async def add_label_to_story(story_ref, label: str) -> dict:

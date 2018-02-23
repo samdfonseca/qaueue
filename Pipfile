@@ -18,6 +18,7 @@ redis-collections = "*"
 pytest = "*"
 pytest-aiohttp = "*"
 fakeredis = "*"
+uwsgi = "*"
 
 
 [dev-packages]

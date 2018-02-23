@@ -20,7 +20,7 @@ class Config(object):
             'qa-talk': '*',
             '*': ['help', 'list'],
             }
-    STATE_COLORS = {
+    STATUS_COLORS = {
             'integration': colors.ORANGE,
             'staging': colors.YELLOW,
             'released': colors.GREEN,
@@ -55,8 +55,8 @@ class Config(object):
     def get_channels_command_enabled(self, command: str) -> typing.List[str]:
         return [k for k, v in self.ENABLED_CHANNEL_COMMANDS.items() if (command in v or v == '*')]
 
-    def get_state_color(self, state: str) -> str:
-        return self.STATE_COLORS.get(state, self.STATE_COLORS['*'])
+    def get_status_color(self, status: str) -> str:
+        return self.STATUS_COLORS.get(status, self.STATUS_COLORS['*'])
 
     def __getattribute__(self, item):
         redis_address = object.__getattribute__(self, 'REDIS_ADDRESS')
@@ -65,7 +65,10 @@ class Config(object):
                                                                                           encoding='utf-8')
         res = redis_conn.hget('CONFIG', item)
         if res is None:
-            return os.environ.get(item, dotenv.get_key('.env', item)) or object.__getattribute__(self, item)
+            res = os.environ.get(item, dotenv.get_key('.env', item))
+            if res is not None:
+                return json.loads(res)
+            return object.__getattribute__(self, item)
         try:
             return json.loads(res.decode())
         except json.JSONDecodeError:

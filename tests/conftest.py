@@ -23,7 +23,7 @@ def config_loaded_redis(request: FixtureRequest):
         'qa-talk': '*',
         '*': ['help', 'list'],
     }))
-    redis_conn.hset('CONFIG', 'STATE_COLORS', json.dumps({
+    redis_conn.hset('CONFIG', 'STATUS_COLORS', json.dumps({
         'integration': colors.ORANGE,
         'staging': colors.YELLOW,
         'released': colors.GREEN,
