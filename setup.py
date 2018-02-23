@@ -17,5 +17,5 @@ if __name__ == '__main__':
           description='QAueue: /qaueue manages the items in the QA pipeline',
           long_description=README,
           install_requires=REQUIREMENTS,
-          packages=find_packages(),
+          packages=['qaueue'],
           )
