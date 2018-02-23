@@ -19,8 +19,7 @@ async def test_create_item():
     assert item.status == statuses.INITIAL
     assert await item.get_priority() == 0
     assert await db.Item.exists(item.item_id) == True
-    assert item.item_id.startswith(db.Item._item_id_prefix)
-    assert item.item_id == f'item:PT/{str(story_id)}'
+    assert item.item_id == f'PT/{str(story_id)}'
     assert (await db.QAueueQueue.index(0)).item_id == item.item_id
     assert len((await db.QAueueQueue.items())) == 1
 

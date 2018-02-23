@@ -43,7 +43,7 @@ class Item(RedisObject):
         self.type = kwargs.get(fields.TYPE)
         self.name = kwargs.get(fields.NAME)
         self.released_at = kwargs.get(fields.RELEASED_AT)
-        self._item_id = kwargs.get('item_id', self.item_id_from_url(self.value))
+        self.item_id = kwargs.get('item_id', self.item_id_from_url(self.value))
 
     @classmethod
     def is_supported_url(cls, url: str) -> str:
@@ -64,9 +64,10 @@ class Item(RedisObject):
 
     @classmethod
     def internal_item_id(cls, item_id: str) -> str:
-        if item_id.startswith(cls._item_id_prefix):
-            return item_id
-        return f'{cls._item_id_prefix}{item_id}'
+        return item_id
+        #  if item_id.startswith(cls._item_id_prefix):
+        #      return item_id
+        #  return f'{cls._item_id_prefix}{item_id}'
 
     @classmethod
     async def exists(cls, item_id: str) -> bool:
@@ -96,17 +97,17 @@ class Item(RedisObject):
             kwargs[field] = await cls.redis.hget(cls.internal_item_id(item_id), field)
         return cls(**kwargs)
 
-    @property
-    def item_id(self) -> str:
-        return self.internal_item_id(self._item_id)
-
-    @item_id.setter
-    def item_id(self, value):
-        self._item_id = value
-
-    @item_id.deleter
-    def item_id(self):
-        del self._item_id
+    #  @property
+    #  def item_id(self) -> str:
+    #      return self.internal_item_id(self._item_id)
+    #  
+    #  @item_id.setter
+    #  def item_id(self, value):
+    #      self._item_id = value
+    #  
+    #  @item_id.deleter
+    #  def item_id(self):
+    #      del self._item_id
 
     async def get_priority(self) -> int:
         return await QAueueQueue.item_priority(self)
