@@ -5,7 +5,6 @@ import github
 from github.Repository import Repository
 from github.PullRequest import PullRequest
 
-from qaueue import db
 from qaueue.constants import item_types, statuses
 
 GITHUB_PR_REGEX = re.compile(('https:\/\/github.com\/(?P<org_name>[a-zA-Z_-]+)'
@@ -39,7 +38,8 @@ async def get_pull_request(g: github.Github, url: str) -> PullRequest:
     return repo.get_pull(pr_id)
 
 
-async def get_pull_request_item(g: github.Github, url: str) -> db.Item:
+async def get_pull_request_item(g: github.Github, url: str):
+    from qaueue import db
     org_name, repo_name, pr_id = parse_pull_request_url(url)
     item_id = f'GH/{repo_name}/{str(pr_id)}'
     if await db.Item.exists(item_id):

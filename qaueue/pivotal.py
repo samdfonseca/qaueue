@@ -3,7 +3,6 @@ import re
 import typing
 from urllib.parse import urljoin
 
-from qaueue import db
 from qaueue.config import Config
 from qaueue.constants import fields, item_types, statuses
 
@@ -81,7 +80,8 @@ async def get_story(story_id: PivotalId,
 
 
 async def get_story_item(story_id: PivotalId,
-    possible_project_ids: typing.Optional[typing.Union[PivotalId, typing.List[PivotalId]]] = None) -> db.Item:
+        possible_project_ids: typing.Optional[typing.Union[PivotalId, typing.List[PivotalId]]] = None):
+    from qaueue import db
     item_id = f'PT/{story_id}'
     if await db.Item.exists(item_id):
         return await db.Item.get(item_id)

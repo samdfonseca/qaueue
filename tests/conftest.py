@@ -1,12 +1,15 @@
 import asyncio
 import json
+import selectors
 
-from qaueue.colors import colors
+from qaueue import db
+from qaueue.constants import colors
 from qaueue.config import Config
 from qaueue.routes import setup_routes
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient
+import aioredis
 import fakeredis
 import pytest
 import _pytest
@@ -50,13 +53,27 @@ class FakeAioRedis(fakeredis.FakeRedis):
         return wrapper
 
 
+@pytest.fixture(autouse=True)
+def fake_aioredis(request: FixtureRequest, loop: asyncio.BaseEventLoop):
+    r = loop.run_until_complete(aioredis.create_redis('redis://localhost:6379', db=2, encoding='utf-8'))
+    loop.run_until_complete(r.flushdb())
+    redis_objects = filter(lambda i: i != db.RedisObject and issubclass(i, db.RedisObject),
+           filter(lambda i: type(i) == type,
+                  map(lambda i: getattr(db, i), dir(db))))
+    for redis_object in redis_objects:
+        redis_object.register_db(r)
+    yield r
+    loop.run_until_complete(r.flushdb())
+
+
 @pytest.fixture
-def qaueue_app(request: FixtureRequest, config_loaded_redis: fakeredis.FakeRedis):
+def qaueue_app(request: FixtureRequest, config_loaded_redis: fakeredis.FakeRedis, fake_aioredis: aioredis.Redis,
+        loop: asyncio.BaseEventLoop):
     app = web.Application()
     # noinspection PyTypeChecker
     config = Config(redis_conn=config_loaded_redis, read_only=True)
     app['config'] = config
-    app['redis'] = FakeAioRedis()
+    app['redis'] = fake_aioredis
     setup_routes(app)
     return app
 

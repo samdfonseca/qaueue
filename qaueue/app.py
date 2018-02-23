@@ -1,8 +1,8 @@
 import os
 
-from .config import Config
-from .redis import close_redis, init_redis
-from .routes import setup_routes
+from qaueue.config import Config
+from qaueue.redis import close_redis, init_redis
+from qaueue.routes import setup_routes
 
 from aiohttp import web
 from dotenv import load_dotenv, find_dotenv
