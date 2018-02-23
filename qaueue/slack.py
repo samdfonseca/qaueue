@@ -51,7 +51,7 @@ def list_item_attachment(item: db.Item, item_queue_index: int, config: Config = 
         item_attachment.update({
             'fallback': f'{item.url} - {item.status}',
             'text': item.name,
-            'title': item.item_id,
+            'title': item._item_id,
             'title_link': item.url,
         })
     else:
