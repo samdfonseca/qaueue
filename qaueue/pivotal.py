@@ -10,9 +10,12 @@ import aiohttp
 
 
 PIVOTAL_BASE_URL = 'https://www.pivotaltracker.com/services/v5'
-PIVOTAL_SHORT_STORY_URL_REGEX = '^https:\/\/www\.pivotaltracker\.com\/story\/show\/(?P<story_id>[0-9]{9})$'
-PIVOTAL_FULL_STORY_URL_REGEX = ('^https:\/\/www\.pivotaltracker\.com\/n\/'
-                                'projects\/(?P<project_id>[0-9]{7})\/stories\/(?P<story_id>[0-9]{9})$')
+PIVOTAL_SHORT_STORY_URL_REGEX = re.compile(('^https:\/\/www\.pivotaltracker\.com'
+                                            '\/story\/show\/(?P<story_id>[0-9]{9})$'))
+PIVOTAL_FULL_STORY_URL_REGEX = re.compile(('^https:\/\/www\.pivotaltracker\.com'
+                                           '\/n\/projects\/(?P<project_id>[0-9]{7})'
+                                           '\/stories\/(?P<story_id>[0-9]{9})$'))
+PIVOTAL_ITEM_ID_REGEX = re.compile('^PT\/[0-9]{9}$')
 
 PivotalId = typing.Union[str, int]
 
@@ -22,11 +25,11 @@ def story_url(project_id: PivotalId, story_id: PivotalId) -> str:
 
 
 def is_short_story_url(url: str) -> bool:
-    return re.match(PIVOTAL_SHORT_STORY_URL_REGEX, url) is not None
+    return PIVOTAL_SHORT_STORY_URL_REGEX.match(url) is not None
 
 
 def is_full_story_url(url: str) -> bool:
-    return re.match(PIVOTAL_FULL_STORY_URL_REGEX, url) is not None
+    return PIVOTAL_FULL_STORY_URL_REGEX.match(url) is not None
 
 
 def is_pivotal_story_url(url: str) -> bool:
@@ -35,12 +38,12 @@ def is_pivotal_story_url(url: str) -> bool:
 
 
 def get_story_id_from_short_url(url: str) -> str:
-    m = re.match(PIVOTAL_SHORT_STORY_URL_REGEX, url)
+    m = PIVOTAL_SHORT_STORY_URL_REGEX.match(url)
     return m.groupdict().get('story_id')
 
 
 def get_project_story_ids_from_full_url(url: str) -> typing.Tuple[str, str]:
-    m = re.match(PIVOTAL_FULL_STORY_URL_REGEX, url)
+    m = PIVOTAL_FULL_STORY_URL_REGEX.match(url)
     groups = m.groupdict()
     return groups.get('project_id'), groups.get('story_id')
 
@@ -52,6 +55,15 @@ def get_story_id_from_url(url: str) -> str:
     if is_short_story_url(url):
         sid = get_story_id_from_short_url(url)
     return sid
+
+
+def get_item_id_from_url(url: str) -> str:
+    story_id = get_story_id_from_url(url)
+    return f'PT/{story_id}'
+
+
+def is_item_id(item_id: str) -> bool:
+    return PIVOTAL_ITEM_ID_REGEX.match(item_id) is not None
 
 
 async def _get_story(project_id: PivotalId, story_id: PivotalId) -> dict:

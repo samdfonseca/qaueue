@@ -38,12 +38,12 @@ def help_func(func: typing.Callable, config: Config = None):
     }
 
 
-def list_item_attachment(item: db.Item, item_queue_index: int, config: Config = None) -> dict:
+async def list_item_attachment(item: db.Item, config: Config = None) -> dict:
     config = config or Config()
     item_attachment = attachment({
         'color': config.get_status_color(item.status),
         'fields': [
-            attachment_field('Priority', str((item_queue_index + 1))),
+            attachment_field('Priority', str(await item.get_priority())),
             attachment_field('Status', item.status),
         ],
     })
@@ -64,7 +64,7 @@ def list_item_attachment(item: db.Item, item_queue_index: int, config: Config = 
     return item_attachment
 
 
-def list_items(items: typing.List[db.Item], config: Config = None) -> dict:
+async def list_items(items: typing.List[db.Item], config: Config = None) -> dict:
     if len(items) == 0:
         return {
             'text': 'Queued Items',
@@ -72,5 +72,5 @@ def list_items(items: typing.List[db.Item], config: Config = None) -> dict:
         }
     return {
         'text': 'Queued Items',
-        'attachments': [list_item_attachment(item, i, config) for i, item in enumerate(items)],
+        'attachments': [await list_item_attachment(item, config) for item in items],
     }

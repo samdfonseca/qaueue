@@ -73,27 +73,20 @@ def md5(val: str) -> str:
     return m.hexdigest()
 
 
-def slack_message_body(args: dict = None, **kwargs) -> dict:
-    is_verbose = args.get('-v', False)
-    defaults = {
-            'response_type': ('in_channel' if is_verbose else 'ephemeral'),
-            }
-    defaults.update(kwargs)
-    return defaults
-
-
-def attachment(opts) -> dict:
-    defaults = {
-            'color': colors.BLUE,
-            }
-    defaults.update(opts)
-    return defaults
+def get_item_id_type(item_id: str) -> typing.Tuple[typing.Optional[str], typing.Optional[dict]]:
+    if re.match('[0-9]+', item_id) is not None:
+        return 'Index', {'item_index': int(item_id)}
+    if github.is_pull_request_url(item_id) or pivotal.is_pivotal_story_url(item_id):
+        return 'URL', {'item_url': item_id}
+    if github.is_item_id(item_id) or pivotal.is_item_id(item_id):
+        return 'ID', {'item_id': item_id}
+    return None, None
 
 
 @qaueue_command('help', default=True)
 async def usage_help(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
     '''/qaueue [-v] help: displays this help message'''
-    body = slack_message_body(args, **{
+    body = slack.message_body(args, **{
         'text': f'```{USAGE}```',
         })
     return json_resp(body)
@@ -105,14 +98,12 @@ async def list_queue(conn: aioredis.Redis, args: dict, config: Config) -> web.Re
     if args.get('help', False):
         body = slack.message_body(args, **slack.help_func(list_queue))
         return json_resp(body)
-    body = slack.message_body(args, **slack.list_items(await db.QAueueQueue.items(), config))
+    body = slack.message_body(args, **(await slack.list_items(await db.QAueueQueue.items(), config)))
     return json_resp(body)
 
 
-async def _add_pivotal_story(conn: aioredis.Redis, story_project_ids: typing.Tuple[str, typing.Optional[str]],
-        config: Config) -> dict:
-    story_id = story_project_ids[0]
-    item_id = f'PT/{story_id}'
+async def _add_pivotal_story(conn: aioredis.Redis, story_url: str, config: Config) -> dict:
+    item_id = pivotal.get_item_id_from_url(story_url)
     if await db.Item.exists(item_id):
         item = await db.Item.get(item_id)
         return slack.attachment({
@@ -125,9 +116,10 @@ async def _add_pivotal_story(conn: aioredis.Redis, story_project_ids: typing.Tup
                 {'title': 'Error', 'value': 'Item already exists', 'short': True},
             ]
         })
+    story_id = pivotal.get_story_id_from_url(story_url)
     project_id = None
-    if len(story_project_ids) == 2:
-        project_id = story_project_ids[1]
+    if pivotal.is_full_story_url(story_url):
+        project_id, story_id = pivotal.get_project_story_ids_from_full_url(story_url)
     if project_id is not None:
         story = await pivotal.get_story_item(story_id, project_id)
     else:
@@ -146,8 +138,7 @@ async def _add_pivotal_story(conn: aioredis.Redis, story_project_ids: typing.Tup
 
 
 async def _add_github_pr(conn: aioredis.Redis, pr_url: str, config: Config) -> dict:
-    org_name, repo_name, pr_id = github.parse_pull_request_url(pr_url)
-    item_id = f'GH/{repo_name}/{str(pr_id)}'
+    item_id = github.get_item_id_from_url(pr_url)
     if await db.Item.exists(item_id):
         item = await db.Item.get(item_id)
         return slack.attachment({
@@ -177,11 +168,7 @@ async def _add_github_pr(conn: aioredis.Redis, pr_url: str, config: Config) -> d
 
 async def _add_item(conn: aioredis.Redis, item: str, config: Config) -> dict:
     if pivotal.is_pivotal_story_url(item):
-        if pivotal.is_full_story_url(item):
-            project_id, story_id = pivotal.get_project_story_ids_from_full_url(item)
-            return await _add_pivotal_story(conn, (story_id, project_id), config)
-        story_id = pivotal.get_story_id_from_url(item)
-        return await _add_pivotal_story(conn, (story_id, None), config)
+        return await _add_pivotal_story(conn, item, config)
     if github.is_pull_request_url(item):
         return await _add_github_pr(conn, item, config)
     return slack.attachment({
@@ -200,118 +187,95 @@ async def add_items(conn: aioredis.Redis, args: dict, config: Config) -> web.Res
     attachments = [await _add_item(conn, item, config) for item in args.get('<item>')]
     body = slack.message_body(args, **{
         'text': 'Added Items',
-        'attachments': (attachments or [attachment({'text': 'No added items'})]),
+        'attachments': (attachments or [slack.attachment({'text': 'No added items'})]),
         })
     return json_resp(body)
 
 
-async def _remove_item(conn: aioredis.Redis, item_id: str) -> RemoveItemResult:
-    exists = await conn.exists(item_id)
-    if exists == 0:
-        return RemoveItemResult(None, item_id, None, f'Item does not exist: {item_id}')
-    tr: aioredis.commands.MultiExec = conn.multi_exec()
-    status = await conn.hget(item_id, fields.STATUS)
-    name = await conn.hget(item_id, fields.NAME)
-    item = await conn.hget(item_id, fields.VALUE)
-    futs = []
-    if status == statuses.INITIAL:
-        futs.append(tr.lrem(QUEUE_KEY, 0, item_id))
-    futs.append(tr.delete(item_id))
-    res1 = await tr.execute()
-    res2 = await asyncio.gather(*futs)
-    assert res1 == res2
-    return RemoveItemResult(item, item_id, name, None)
-
+async def _remove_item(conn: aioredis.Redis, item_id: str, config: Config) -> dict:
+    item_id_type, get_item_kwargs = get_item_id_type(item_id)
+    if get_item_kwargs is None:
+        return slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': f'Item not found. Unrecognized item ID type: {item_id}',
+        })
+    item: db.Item = await db.Item.get(**get_item_kwargs)
+    if item is None:
+        return slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': 'Item not found',
+            'fields': [
+                slack.attachment_field(item_id_type, item_id),
+            ],
+        })
+    await item.remove()
+    return slack.attachment({
+        'fallback': f'Item removed from queue: {item.item_id}',
+        'color': colors.GREEN,
+        'text': item.name,
+        'title': item.item_id,
+        'title_link': item.url,
+    })
 
 
 @qaueue_command('remove')
 async def remove_items(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
     '''/qaueue remove <remove_item_id>...: removes an item from the pipeline and deletes the record of its status'''
-    res = [await _remove_item(conn, item) for item in args.get('<remove_item_id>', [])]
-    if len(res) == 0:
-        return json_resp({
-            'attachments': [
-                attachment({
-                    'color': colors.RED,
-                    'text': 'No Items Removed',
-                    }),
-                ],
-            })
-    attachments = []
-    for removed_item in res:
-        if removed_item.err is not None:
-            attachments.append(attachment({
-                'fallback': f'{removed_item.err} - {removed_item.item}',
-                'color': colors.RED,
-                'text': (removed_item.name or removed_item.item),
-                'title': removed_item.item_id,
-                'title_link': removed_item.item,
-                'fields': [
-                    {'title': 'Error', 'value': removed_item.err, 'short': True},
-                    ]
-                }))
-        else:
-            attachments.append(attachment({
-                'fallback': f'Removed item: {removed_item.item}',
-                'text': (removed_item.name or removed_item.item),
-                'title': removed_item.item_id,
-                'title_link': removed_item.item,
-                }))
-    body = slack_message_body(args, **{
+    attachments = [await _remove_item(conn, item, config) for item in args.get('<remove_item_id>', [])]
+    body = slack.message_body(args, **{
         'text': 'Removed Items',
-        'attachments': (attachments or [attachment({'text': 'No Items Removed'})]),
-        })
+        'attachments': (attachments or [slack.attachment({'text': 'No removed items'})]),
+    })
     return json_resp(body)
+
+
+async def _get_item_status(conn: aioredis.Redis, item_id: str, config: Config) -> dict:
+    item_id_type, get_item_kwargs = get_item_id_type(item_id)
+    if get_item_kwargs is None:
+        return slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': f'Item not found. Unrecognized item ID type: {item_id}',
+        })
+    item: db.Item = await db.Item.get(**get_item_kwargs)
+    if item is None:
+        return slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': 'Item not found',
+            'fields': [
+                slack.attachment_field(item_id_type, item_id),
+            ]
+        })
+    msg_fields = [
+        slack.attachment_field('Status', item.status),
+    ]
+    if item.status == statuses.COMPLETED and item.released_at is not None:
+        msg_fields.append(slack.attachment_field('Released At', item.released_at))
+    return slack.attachment({
+        'text': item.name,
+        'title': item.item_id,
+        'title_link': item.url,
+        'fields': msg_fields,
+    })
 
 
 @qaueue_command('status')
-async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
+async def get_item_statuses(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
     '''/qaueue [-v] status <status_item_id>...: gets the statuses for the given items'''
-    item_ids = args.get('<status_item_id>')
-    attachments = []
-    if len(item_ids) == 0:
-        return await usage_help(conn, args, config)
-    for item_id in item_ids:
-        exists = await conn.exists(item_id)
-        if exists == 0:
-            attachments.append(attachment({
-                'color': colors.RED,
-                'text': '{item_id} does not exist',
-            }))
-            continue
-        status = await conn.hget(item_id, fields.STATUS)
-        item_type = await conn.hget(item_id, fields.TYPE)
-        msg_fields = [
-            {'title': 'Status', 'value': status, 'short': True},
-        ]
-        if status == statuses.COMPLETED:
-            released_at = await conn.hget(item_id, fields.RELEASED_AT)
-            msg_fields.append({'title': 'Released At', 'value': released_at, 'short': True})
-        if item_type in [item_types.GITHUB_PUlL_REQUEST, item_types.PIVOTAL_STORY]:
-            item_url = await conn.hget(item_id, fields.URL)
-            attachments.append(attachment({
-                'title': item_id,
-                'title_link': item_url,
-                'fields': msg_fields,
-            }))
-        else:
-            item_value = await conn.hget(item_id, fields.VALUE)
-            attachments.append(attachment({
-                'text': item_value,
-                'fields': msg_fields,
-            }))
-    body = slack_message_body(args, **{
+    attachments = [await _get_item_status(conn, item, config) for item in args.get('<status_item_id>', [])]
+    body = slack.message_body(args, **{
         'text': 'Item Statuses',
-        'attachments': attachments,
-        })
+        'attachments': (attachments or [slack.attachment({'text': 'No item statuses'})]),
+    })
     return json_resp(body)
 
 
-async def _complete_item(conn: aioredis.Redis, item: str, config: Config):
-    item_type = await conn.hget(item, fields.TYPE)
-    if item_type == item_types.PIVOTAL_STORY:
-        item_url = await conn.hget(item, fields.URL)
-        label = await pivotal.add_rc_label_to_story(item_url)
+async def _complete_item(item: db.Item):
+    if item.type == item_types.PIVOTAL_STORY:
+        label = await pivotal.add_rc_label_to_story(item.url)
 
 
 @qaueue_command('update')
@@ -319,82 +283,140 @@ async def set_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
     '''/qaueue update <update_item_id> <status>: sets the items current status'''
     item_id = args.get('<update_item_id>')
     new_status = args.get('<status>')
-    exists = await conn.exists(item_id)
-    if exists == 0:
-        return json_resp(slack_message_body(args, **{
-            'text': f'Set Item Status: {item_id}',
-            'attachments': [attachment({'text': 'Does not exist'})],
-            }))
-    tr: aioredis.commands.MultiExec = conn.multi_exec()
-    futs = []
-    if new_status == statuses.COMPLETED:
-        futs.append(tr.lrem(QUEUE_KEY, 0, item_id))
-        await _complete_item(conn, item_id, config)
-    futs.append(tr.hset(item_id, fields.STATUS, new_status))
-    futs.append(tr.hset(item_id, fields.RELEASED_AT, datetime.now().isoformat()))
-    res1 = await tr.execute()
-    res2 = await asyncio.gather(*futs)
-    assert res1 == res2
-    return json_resp(slack_message_body(args, **{
-        'text': f'Set Item Status: {item_id}',
-        'attachments': [attachment({'text': f'Set status: {new_status}'})],
+    item_id_type, get_item_kwargs = get_item_id_type(item_id)
+    if get_item_kwargs is None:
+        attachment = slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': f'Item not found. Unrecognized item ID type: {item_id}',
+        })
+        return json_resp(slack.message_body(args, **{
+            'text': 'Set Item Status',
+            'attachments': [
+                attachment,
+            ],
         }))
+    item: db.Item = await db.Item.get(**get_item_kwargs)
+    if item is None:
+        return json_resp(slack.message_body(args, **{
+            'text': 'Set Item Status',
+            'attachments': [
+                slack.attachment({
+                    'fallback': f'Item not found: {item_id}',
+                    'color': colors.RED,
+                    'text': 'Item not found',
+                    'fields': [
+                        slack.attachment_field(item_id_type, item_id),
+                    ],
+                }),
+            ],
+        }))
+    item.status = new_status
+    if new_status == statuses.COMPLETED:
+        await _complete_item(item)
+    await item.update()
+    return json_resp(slack.message_body(args, **{
+        'text': 'Set Item Status',
+        'attachments': [
+            slack.attachment({
+                'title': item.item_id,
+                'title_link': item.url,
+                'fields': [
+                    slack.attachment_field('Status', item.status),
+                ],
+            }),
+        ],
+    }))
 
 
 @qaueue_command('prioritize')
 async def prioritize_item(conn: aioredis.Redis, args: dict, config: Config) -> web.Response:
-    '''/qaueue prioritize <prioritize_item_id> <priority_index>: reorders an item in the pipeline (0 indexed)'''
+    '''/qaueue prioritize <prioritize_item_id> <priority_index>: reorders an item in the pipeline (1 indexed)'''
     item_id = args.get('<prioritize_item_id>')
     new_pindex = int(args.get('<priority_index>'))
-    if new_pindex < 0:
-        return json_resp(slack_message_body(args, **{
+    item_id_type, get_item_kwargs = get_item_id_type(item_id)
+    if get_item_kwargs is None:
+        attachment = slack.attachment({
+            'fallback': f'Item not found: {item_id}',
+            'color': colors.RED,
+            'text': f'Item not found. Unrecognized item ID type: {item_id}',
+        })
+        return json_resp(slack.message_body(args, **{
             'text': 'Prioritize Item',
-            'attachments': [attachment({'text': (f'Invalid priority index \'{new_pindex}\': '
-                'must be greater than or equal to 0')})],
-            }))
-    exists = await conn.exists(item_id)
-    if exists == 0:
-        return json_resp(slack_message_body(args, **{
-            'text': 'Prioritize Item',
-            'attachments': [attachment({'text': f'Item does not exist: {item_id}'})],
-            }))
-    status = await conn.hget(item_id, fields.STATUS)
-    if status != statuses.INITIAL:
-        return json_resp(slack_message_body(args, **{
-            'text': 'Prioritize Item',
-            'attachments': [attachment({'text': f'Item is not queued: {item_id}'})],
-            }))
-    tr: aioredis.commands.MultiExec = conn.multi_exec()
-    futs = []
-    if new_pindex == 1:
-        futs.append(tr.lrem(QUEUE_KEY, 0, item_id))
-        futs.append(tr.lpush(QUEUE_KEY, item_id))
-    if new_pindex >= 2:
-        after_item_id = await conn.lindex(QUEUE_KEY, (new_pindex - 1))
-        if after_item_id != item_id:
-            futs.append(tr.lrem(QUEUE_KEY, 0, item_id))
-            futs.append(tr.linsert(QUEUE_KEY, after_item_id, item_id))
-    res1 = await tr.execute()
-    res2 = await asyncio.gather(*futs)
-    assert res1 == res2
-    return json_resp(slack_message_body(args, **{
-        'text': 'Prioritize Item',
-        'attachments': [attachment({'text': f'Set item to priority \'{new_pindex}\': {item_id}'})],
+            'attachments': [
+                attachment,
+            ],
         }))
+    item: db.Item = await db.Item.get(**get_item_kwargs)
+    if new_pindex < 0:
+        return json_resp(slack.message_body(args, **{
+            'text': 'Prioritize Item',
+            'attachments': [
+                slack.attachment({
+                    'text': ((f'Invalid priority index \'{new_pindex}\': '
+                              f'must be greater than or equal to 0')),
+                }),
+            ],
+        }))
+    if item is None:
+        return json_resp(slack.message_body(args, **{
+            'text': 'Prioritize Item',
+            'attachments': [
+                slack.attachment({
+                    'fallback': f'Item not found: {item_id}',
+                    'color': colors.RED,
+                    'text': 'Item not found',
+                    'fields': [
+                        slack.attachment_field(item_id_type, item_id),
+                    ],
+                }),
+            ],
+        }))
+    if item.status != statuses.INITIAL:
+        return json_resp(slack.message_body(args, **{
+            'text': 'Prioritize Item',
+            'attachments': [
+                slack.attachment({
+                    'fallback': f'Item is not queued: {item.item_id}',
+                    'color': colors.RED,
+                    'text': 'Item is not queued',
+                    'title': item.item_id,
+                    'title_link': item.url,
+                    'fields': [
+                        slack.attachment_field('Status', item.status),
+                    ]
+                }),
+            ],
+        }))
+    await item.set_priority(new_pindex)
+    return json_resp(slack.message_body(args, **{
+        'text': 'Prioritize Item',
+        'attachments': [
+            slack.attachment({
+                'fallback': f'Set item to priority \'{new_pindex}\': {item_id}',
+                'text': item.name,
+                'title': item.item_id,
+                'title_link': item.url,
+                'fields': [
+                    slack.attachment_field('Priority', str(new_pindex)),
+                ],
+            }),
+        ],
+    }))
 
 
 def channel_command_not_enabled(args: dict, channel: str, command: str, enabled_channels: typing.List[str] = None) -> web.Response:
     err_msg = f'Command is not enabled in #{channel}'
     if len(enabled_channels) > 0:
         err_msg += '. Use one of the following channels: ' + ', '.join([f'#{c}' for c in enabled_channels])
-    return json_resp(slack_message_body(args, **{
+    return json_resp(slack.message_body(args, **{
         'attachments': [
-            attachment({
+            slack.attachment({
                 'color': colors.RED,
                 'text': err_msg,
-                }),
-            ],
-        }))
+            }),
+        ],
+    }))
 
 
 async def index(request: web.Request):

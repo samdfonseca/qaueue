@@ -54,7 +54,7 @@ async def test_prioritize_items():
     assert (await db.QAueueQueue.index(0)).item_id == item1.item_id
     assert (await db.QAueueQueue.index(1)).item_id == item2.item_id
     assert len((await db.QAueueQueue.items())) == 2
-    await item1.set_priority(2)
+    await item1.set_priority(1)
     assert await item1.get_priority() == 1
     assert await item2.get_priority() == 0
     assert (await db.QAueueQueue.index(1)).item_id == item1.item_id

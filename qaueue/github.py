@@ -9,6 +9,7 @@ from qaueue.constants import item_types, statuses
 
 GITHUB_PR_REGEX = re.compile(('https:\/\/github.com\/(?P<org_name>[a-zA-Z_-]+)'
                               '\/(?P<repo_name>[a-zA-Z_-]+)\/pull\/(?P<pr_id>[0-9]+)$'))
+GITHUB_ITEM_ID_REGEX = re.compile('^GH\/.+\/[0-9]+$')
 
 
 def is_pull_request_url(url: str) -> bool:
@@ -21,6 +22,15 @@ def parse_pull_request_url(url: str) -> typing.Tuple[str, str, int]:
     if pr_id is not None:
         pr_id = int(pr_id)
     return m.get('org_name'), m.get('repo_name'), pr_id
+
+
+def get_item_id_from_url(url: str) -> str:
+    _, repo_name, pr_id = parse_pull_request_url(url)
+    return f'GH/{repo_name}/{pr_id}'
+
+
+def is_item_id(item_id: str) -> bool:
+    return GITHUB_ITEM_ID_REGEX.match(item_id) is not None
 
 
 def new_client(access_token: str) -> github.Github:

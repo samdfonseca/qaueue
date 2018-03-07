@@ -27,6 +27,33 @@ class ItemAlreadyExistsError(Exception):
         super().__init__(f'Item already exists: {item.item_id}')
 
 
+class InvalidItemStatusError(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
+
+
+class ItemNotInQueueError(Exception):
+    def __init__(self, item):
+        super().__init__(f'Item not found in queue: {item.item_id}')
+
+
+class OutOfRangePriorityIndexError(Exception):
+    def __init__(self, priority_index: int, range_len: int):
+        index_min = 0
+        index_max = range_len - 1
+        index_negative_min = -1
+        index_negative_max = -range_len
+        msg = (f'Priority index \'{priority_index}\' is out of range. Valid ranges: '
+               f'{index_min} <= priority_index <= {index_max}, '
+               f'{index_negative_min} >= priority_index >= {index_negative_max}')
+        super().__init__(msg)
+
+
+class InvalidItemPriorityError(Exception):
+    def __init__(self, priority_index: int):
+        super().__init__(f'Priority index is not valid: {str(priority_index)}')
+
+
 class Item(RedisObject):
     _item_id_prefix = 'item:'
     _url_validators = [
@@ -85,9 +112,18 @@ class Item(RedisObject):
         return await cls.get(item.item_id)
 
     @classmethod
-    async def get(cls, item_id: str):
+    async def get(cls, item_id: str = None, item_index: int = None, item_url: str = None):
+        if item_id is None and item_index is None and item_url is None:
+            return
         if cls.redis is None:
             return
+        if item_id is None and (item_index is not None or item_url is not None):
+            if item_index is not None:
+                return await QAueueQueue.index(item_index)
+            if pivotal.is_pivotal_story_url(item_url):
+                item_id = pivotal.get_item_id_from_url(item_url)
+            if github.is_pull_request_url(item_url):
+                item_id = github.get_item_id_from_url(item_url)
         if not await cls.exists(item_id):
             return
         if item_id.startswith(cls._item_id_prefix):
@@ -151,6 +187,8 @@ class QAueueQueue(RedisObject):
     @classmethod
     async def index(cls, i) -> Item:
         item_id = await cls.redis.lindex(cls.key, i)
+        if item_id is None:
+            return
         item = await Item.get(item_id)
         return item
 
@@ -167,14 +205,28 @@ class QAueueQueue(RedisObject):
             i += 1
 
     @classmethod
-    async def prioritize(cls, item: Item, priority: int):
+    async def prioritize(cls, item: Item, priority: int, force: bool = False):
+        if item.status != statuses.INITIAL and force is not True:
+            raise InvalidItemStatusError(f'Item cannot be prioritized since status is not \'queued\': {item.item_id}')
         tr: aioredis.commands.MultiExec = cls.redis.multi_exec()
         futs = []
-        if priority == 1:
+        queue_len = len(await cls.items())
+        if priority >= queue_len or (priority < 0 and abs(priority) > queue_len):
+            # Priority index is out of bounds
+            raise OutOfRangePriorityIndexError(priority, queue_len)
+        if priority < 0:
+            # Convert negative priority index to positive, ex. [1,2,3][-2] -> 3 + -2 = 1 -> [1,2,3][1]
+            priority = queue_len + priority
+        if priority == (queue_len - 1):
+            # Move item to back of queue
+            futs.append(tr.lrem(cls.key, 0, item.item_id))
+            futs.append(tr.rpush(cls.key, item.item_id))
+        if priority == 0:
+            # Move item to front of queue
             futs.append(tr.lrem(cls.key, 0, item.item_id))
             futs.append(tr.lpush(cls.key, item.item_id))
-        if priority >= 2:
-            after_item_id = await cls.redis.lindex(cls.key, (priority - 1))
+        if priority >= 1:
+            after_item_id = await cls.redis.lindex(cls.key, priority)
             if after_item_id != item.item_id:
                 futs.append(tr.lrem(cls.key, 0, item.item_id))
                 futs.append(tr.linsert(cls.key, after_item_id, item.item_id))
@@ -185,13 +237,13 @@ class QAueueQueue(RedisObject):
         if await cls.item_priority(item) is not None:
             return
         tr = cls.redis.multi_exec()
-        futs = [
-            tr.rpush(cls.key, item.item_id),
-            tr.hset(item.item_id, fields.STATUS, statuses.INITIAL),
-            tr.llen(cls.key),
-        ]
+        tr.llen(cls.key)
+        tr.rpush(cls.key, item.item_id),
+        tr.hset(item.item_id, fields.STATUS, statuses.INITIAL),
+        tr.llen(cls.key),
         res = await tr.execute()
-        return res[-1]
+        assert res[0] == (res[-1] - 1)
+        return await cls.item_priority(item)
 
     @classmethod
     async def remove_from_queue(cls, item: Item):
