@@ -9,7 +9,7 @@ from aiohttp import web
 import aioredis
 
 
-CommandFunc = typing.Callable[[aioredis.Redis, dict, Config], typing.Awaitable]
+CommandFunc = typing.Callable[[aioredis.Redis, dict, Config], typing.Awaitable[web.Response]]
 
 
 class DuplicateCommandError(Exception):

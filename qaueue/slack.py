@@ -10,10 +10,20 @@ from aioredis import Redis
 
 
 def message_body(args: dict = None, **kwargs) -> dict:
-    is_verbose = args.get('-v', False)
-    defaults = {
-        'response_type': ('in_channel' if is_verbose else 'ephemeral'),
-    }
+    defaults = {}
+    if args.get('add', False):
+        # Special case, `/qaueue add` has 'response_type' set to 'in_channel' by default
+        # and 'ephemeral' only if the `-q` flag is used
+        is_quiet = args.get('-q', False)
+        if is_quiet:
+            # `-q` flag is used, so set 'response_type' to 'ephemeral'
+            defaults['response_type'] = 'ephemeral'
+        else:
+            # `-q` flag not used, so set 'response_type' to 'in_channel'
+            defaults['response_type'] = 'in_channel'
+    else:
+        is_verbose = args.get('-v', False)
+        defaults['response_type'] = 'in_channel' if is_verbose else 'ephemeral'
     defaults.update(kwargs)
     return defaults
 
@@ -26,7 +36,9 @@ def attachment(opts) -> dict:
     return defaults
 
 
-def attachment_field(title: str, value: str, short: bool = True) -> dict:
+def attachment_field(title: str, value: typing.Union[str, int], short: bool = True) -> dict:
+    if isinstance(value, int):
+        value = str(value)
     return dict(title=title, value=value, short=short)
 
 
@@ -47,20 +59,12 @@ async def list_item_attachment(item: db.Item, config: Config = None) -> dict:
             attachment_field('Status', item.status),
         ],
     })
-    if item.type in [item_types.GITHUB_PUlL_REQUEST, item_types.PIVOTAL_STORY]:
-        item_attachment.update({
-            'fallback': f'{item.url} - {item.status}',
-            'text': item.name,
-            'title': item.item_id,
-            'title_link': item.url,
-        })
-    else:
-        item_attachment.update({
-            'fallback': f'{item.value} - {item.status}',
-            'color': config.get_status_color(item.status),
-            'title': item.value,
-            'title_link': item.value,
-        })
+    item_attachment.update({
+        'fallback': f'{item.url} - {item.status}',
+        'text': item.name,
+        'title': item.item_id,
+        'title_link': item.url,
+    })
     return item_attachment
 
 
@@ -74,3 +78,21 @@ async def list_items(items: typing.List[db.Item], config: Config = None) -> dict
         'text': 'Queued Items',
         'attachments': [await list_item_attachment(item, config) for item in items],
     }
+
+
+async def render_item_as_attachment(item: db.Item, color: str = None) -> dict:
+    opts = {
+        'fallback': f'{item.url} - {item.name}',
+        'title': item.name,
+        'title_link': item.url,
+        'fields': [
+            attachment_field('Priority', await item.get_priority()),
+            attachment_field('Status', item.status),
+        ],
+    }
+    if color is not None:
+        opts['color'] = color
+    a = attachment(opts)
+    if item.released_at is not None:
+        a['fields'].append(attachment_field('Released At', item.released_at))
+    return a

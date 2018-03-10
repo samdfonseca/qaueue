@@ -66,13 +66,13 @@ def is_item_id(item_id: str) -> bool:
     return PIVOTAL_ITEM_ID_REGEX.match(item_id) is not None
 
 
-async def _get_story(project_id: PivotalId, story_id: PivotalId) -> dict:
+async def _get_story(project_id: PivotalId, story_id: PivotalId) -> typing.Optional[dict]:
     project_id = str(project_id)
     story_id = str(story_id)
     url = f'{PIVOTAL_BASE_URL}/projects/{project_id}/stories/{story_id}'
     headers = {
-            'X-TrackerToken': Config().PIVOTAL_API_TOKEN,
-            }
+        'X-TrackerToken': Config().PIVOTAL_API_TOKEN,
+    }
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
             if resp.status >= 300:
@@ -99,18 +99,17 @@ async def get_story_item(story_id: PivotalId,
         return await db.Item.get(item_id)
     resp = await get_story(story_id, possible_project_ids)
     status = statuses.INITIAL
-    value = resp.get('url')
+    url = resp.get('url')
     type = item_types.PIVOTAL_STORY
     name = resp.get('name')
-    url = value
-    return db.Item(item_id=item_id, status=status, value=value, type=type, name=name, url=url)
+    return db.Item(item_id=item_id, status=status, type=type, name=name, url=url)
 
 
 async def add_label_to_story(story_ref, label: str) -> dict:
     conf = Config()
-    story_id = get_story_id_from_url(story_ref)
-    if story_id is None:
-        story_id = story_ref
+    story_id = story_ref
+    if is_pivotal_story_url(story_ref):
+        story_id = get_story_id_from_url(story_ref)
     project_id = (await get_story(story_id, conf.PIVOTAL_PROJECT_IDS)).get('project_id')
     headers = {
         'X-TrackerToken': conf.PIVOTAL_API_TOKEN,

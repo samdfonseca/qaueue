@@ -57,6 +57,6 @@ async def get_pull_request_item(g: github.Github, url: str):
     pr = await get_pull_request(g, url)
     status = statuses.INITIAL
     value = url
-    type = item_types.GITHUB_PUlL_REQUEST
+    type = item_types.GITHUB_PULL_REQUEST
     name = pr.title
     return db.Item(item_id=item_id, value=value, status=status, type=type, name=name, url=url)

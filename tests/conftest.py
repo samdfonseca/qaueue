@@ -1,6 +1,6 @@
 import asyncio
 import json
-import selectors
+import signal
 
 from qaueue import db
 from qaueue.constants import colors
@@ -55,7 +55,7 @@ class FakeAioRedis(fakeredis.FakeRedis):
 
 @pytest.fixture(autouse=True)
 def fake_aioredis(request: FixtureRequest, loop: asyncio.BaseEventLoop):
-    r = loop.run_until_complete(aioredis.create_redis('redis://localhost:6379', db=2, encoding='utf-8'))
+    r: aioredis.Redis = loop.run_until_complete(aioredis.create_redis('redis://localhost:6379', db=2, encoding='utf-8'))
     loop.run_until_complete(r.flushdb())
     redis_objects = filter(lambda i: i != db.RedisObject and issubclass(i, db.RedisObject),
            filter(lambda i: type(i) == type,
@@ -64,6 +64,8 @@ def fake_aioredis(request: FixtureRequest, loop: asyncio.BaseEventLoop):
         redis_object.register_db(r)
     yield r
     loop.run_until_complete(r.flushdb())
+    r._pool_or_conn.close()
+    loop.run_until_complete(r._pool_or_conn.wait_closed())
 
 
 @pytest.fixture
@@ -80,4 +82,4 @@ def qaueue_app(request: FixtureRequest, config_loaded_redis: fakeredis.FakeRedis
 
 @pytest.fixture
 def qaueue_client(loop: asyncio.BaseEventLoop, aiohttp_client, qaueue_app: web.Application):
-    return loop.run_until_complete(aiohttp_client(qaueue_app))
+    yield loop.run_until_complete(aiohttp_client(qaueue_app))

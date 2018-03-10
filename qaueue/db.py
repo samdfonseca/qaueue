@@ -1,6 +1,6 @@
-import asyncio
-from contextlib import contextmanager
+import hashlib
 import typing
+from uuid import uuid4
 
 from qaueue import github
 from qaueue import pivotal
@@ -54,57 +54,67 @@ class InvalidItemPriorityError(Exception):
         super().__init__(f'Priority index is not valid: {str(priority_index)}')
 
 
+class UnsupportedKwargError(Exception):
+    pass
+
+
 class Item(RedisObject):
-    _item_id_prefix = 'item:'
     _url_validators = [
-            pivotal.is_pivotal_story_url,
-            github.is_pull_request_url,
-            ]
+        (pivotal.is_pivotal_story_url, item_types.PIVOTAL_STORY),
+        (github.is_pull_request_url, item_types.GITHUB_PULL_REQUEST),
+    ]
 
     def __init__(self, **kwargs):
         self.status = kwargs.get(fields.STATUS)
         self.url = kwargs.get(fields.URL)
-        if not self.is_supported_url(self.url):
-            raise UnsupportedItemTypeError
-        self.value = self.url or kwargs.get(fields.VALUE)
-        self.type = kwargs.get(fields.TYPE)
         self.name = kwargs.get(fields.NAME)
         self.released_at = kwargs.get(fields.RELEASED_AT)
-        self.item_id = kwargs.get('item_id', self.item_id_from_url(self.value))
+        self.item_id = kwargs.get(fields.ITEM_ID, self.item_id_from_url(self.url))
+        if not self.is_supported_url(self.url):
+            raise UnsupportedItemTypeError
+        self.type = kwargs.get(fields.TYPE, self.get_item_type(self.url))
+        if self.type not in item_types.values():
+            raise UnsupportedItemTypeError
 
     @classmethod
-    def is_supported_url(cls, url: str) -> str:
-        for func in cls._url_validators:
+    def is_supported_url(cls, url: str) -> bool:
+        for func, _ in cls._url_validators:
             if func(url):
                 return True
         return False
 
     @classmethod
-    def item_id_from_url(cls, url: str) -> str:
-        if github.is_pull_request_url(url):
-            org_name, repo_name, pr_id = github.parse_pull_request_url(url)
-            return cls.internal_item_id(f'GH/{repo_name}/{str(pr_id)}')
-        if pivotal.is_pivotal_story_url(url):
-            story_id = pivotal.get_story_id_from_url(url)
-            return cls.internal_item_id(f'PT/{story_id}')
+    def get_item_type(cls, item_url) -> str:
+        for check_url_func, item_type in cls._url_validators:
+            if check_url_func(item_url):
+                return item_type
         raise UnsupportedItemTypeError
 
     @classmethod
-    def internal_item_id(cls, item_id: str) -> str:
-        return item_id
-        #  if item_id.startswith(cls._item_id_prefix):
-        #      return item_id
-        #  return f'{cls._item_id_prefix}{item_id}'
+    def item_id_from_url(cls, url: str) -> str:
+        if cls.is_supported_url(url):
+            return hashlib.md5(url.encode()).hexdigest()
+        raise UnsupportedItemTypeError
 
     @classmethod
-    async def exists(cls, item_id: str) -> bool:
+    async def exists(cls, item_id: str = None, item_url: str = None) -> typing.Optional[bool]:
+        if item_id is None and item_url is None:
+            return
         if cls.redis is None:
             return False
-        exists = await cls.redis.exists(cls.internal_item_id(item_id))
+        item_id = item_id or (cls.item_id_from_url(item_url) if item_url is not None else None)
+        if item_id is None:
+            return
+        exists = await cls.redis.exists(item_id)
         return exists == 1
 
     @classmethod
     async def create(cls, **kwargs):
+        if 'item_id' in kwargs:
+            raise UnsupportedKwargError('item_id can not be passed as a kwarg')
+        if 'type' in kwargs:
+            raise UnsupportedKwargError('type can not be passed as a kwarg')
+        kwargs['status'] = kwargs.get('status', statuses.INITIAL)
         item = cls(**kwargs)
         if not await cls.exists(item.item_id):
             await item.add_to_queue()
@@ -120,30 +130,14 @@ class Item(RedisObject):
         if item_id is None and (item_index is not None or item_url is not None):
             if item_index is not None:
                 return await QAueueQueue.index(item_index)
-            if pivotal.is_pivotal_story_url(item_url):
-                item_id = pivotal.get_item_id_from_url(item_url)
-            if github.is_pull_request_url(item_url):
-                item_id = github.get_item_id_from_url(item_url)
+            # item_url is not None
+            item_id = cls.item_id_from_url(item_url)
         if not await cls.exists(item_id):
             return
-        if item_id.startswith(cls._item_id_prefix):
-            item_id = item_id.lstrip(cls._item_id_prefix)
         kwargs = {'item_id': item_id}
         for field in fields.values():
-            kwargs[field] = await cls.redis.hget(cls.internal_item_id(item_id), field)
+            kwargs[field] = await cls.redis.hget(item_id, field)
         return cls(**kwargs)
-
-    #  @property
-    #  def item_id(self) -> str:
-    #      return self.internal_item_id(self._item_id)
-    #  
-    #  @item_id.setter
-    #  def item_id(self, value):
-    #      self._item_id = value
-    #  
-    #  @item_id.deleter
-    #  def item_id(self):
-    #      del self._item_id
 
     async def get_priority(self) -> int:
         return await QAueueQueue.item_priority(self)
@@ -170,6 +164,11 @@ class Item(RedisObject):
             await QAueueQueue.remove_from_queue(self)
         await self.redis.delete(self.item_id)
 
+    def to_json(self):
+        item_json = {field: getattr(self, field) for field in fields.values()}
+        item_json['priority'] = self.get_priority()
+        return item_json
+
 
 class QAueueQueue(RedisObject):
     key = 'qaueue_Q'
@@ -185,7 +184,7 @@ class QAueueQueue(RedisObject):
         return items_
 
     @classmethod
-    async def index(cls, i) -> Item:
+    async def index(cls, i) -> typing.Optional[Item]:
         item_id = await cls.redis.lindex(cls.key, i)
         if item_id is None:
             return
@@ -193,7 +192,7 @@ class QAueueQueue(RedisObject):
         return item
 
     @classmethod
-    async def item_priority(cls, item: Item) -> int:
+    async def item_priority(cls, item: Item) -> typing.Optional[int]:
         i = 0
         qlen = await cls.redis.llen(cls.key)
         while True:
@@ -248,3 +247,8 @@ class QAueueQueue(RedisObject):
     @classmethod
     async def remove_from_queue(cls, item: Item):
         await cls.redis.lrem(cls.key, 0, item.item_id)
+
+    @classmethod
+    async def to_json(cls) -> list:
+        items = await cls.items()
+        return [item.to_json() for item in items]

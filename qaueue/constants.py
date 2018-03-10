@@ -29,8 +29,8 @@ class colors(_constant):
 
 
 class fields(_constant):
+    ITEM_ID = 'item_id'
     STATUS = 'status'
-    VALUE = 'value'
     TYPE = 'type'
     NAME = 'name'
     URL = 'url'
@@ -55,5 +55,5 @@ class statuses(_constant):
 
 class item_types(_constant):
     PIVOTAL_STORY = 'pivotal_story'
-    GITHUB_PUlL_REQUEST = 'github_pr'
+    GITHUB_PULL_REQUEST = 'github_pr'
     OTHER = 'other'
