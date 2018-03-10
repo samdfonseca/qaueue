@@ -12,14 +12,13 @@ gunicorn = "*"
 aiohttp = "*"
 aioredis = "*"
 docopt = "*"
-pygithub = "*"
+PyGithub = "*"
 redis = "*"
 redis-collections = "*"
 pytest = "*"
 pytest-aiohttp = "*"
 fakeredis = "*"
-cryptography = "*"
-faker = "*"
+Faker = "*"
 
 
 [dev-packages]
