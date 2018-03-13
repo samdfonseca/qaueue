@@ -62,7 +62,7 @@ async def list_item_attachment(item: db.Item, config: Config = None) -> dict:
     item_attachment.update({
         'fallback': f'{item.url} - {item.status}',
         'text': item.name,
-        'title': item.item_id,
+        'title': item.url,
         'title_link': item.url,
     })
     return item_attachment
@@ -76,14 +76,15 @@ async def list_items(items: typing.List[db.Item], config: Config = None) -> dict
         }
     return {
         'text': 'Queued Items',
-        'attachments': [await list_item_attachment(item, config) for item in items],
+        'attachments': [await render_item_as_attachment(item, config=config) for item in items],
     }
 
 
-async def render_item_as_attachment(item: db.Item, color: str = None) -> dict:
+async def render_item_as_attachment(item: db.Item, color: str = None, config: Config = None) -> dict:
     opts = {
         'fallback': f'{item.url} - {item.name}',
-        'title': item.name,
+        'text': item.name,
+        'title': item.url,
         'title_link': item.url,
         'fields': [
             attachment_field('Priority', await item.get_priority()),
@@ -92,6 +93,8 @@ async def render_item_as_attachment(item: db.Item, color: str = None) -> dict:
     }
     if color is not None:
         opts['color'] = color
+    if color is None and config is not None:
+        opts['color'] = config.get_status_color(item.status)
     a = attachment(opts)
     if item.released_at is not None:
         a['fields'].append(attachment_field('Released At', item.released_at))

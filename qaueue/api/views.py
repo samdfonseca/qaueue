@@ -21,7 +21,7 @@ async def _add_pivotal_story(story_url: str, config: Config) -> web.Response:
     else:
         story = await pivotal.get_story_item(story_id, config.PIVOTAL_PROJECT_IDS)
     await story.update()
-    return web.json_response(story.to_json())
+    return web.json_response(await story.to_json())
 
 
 async def _add_github_pr(pr_url: str, config: Config) -> web.Response:
@@ -31,7 +31,7 @@ async def _add_github_pr(pr_url: str, config: Config) -> web.Response:
     g = github.new_client(config.GITHUB_ACCESS_TOKEN)
     pull_request = await github.get_pull_request_item(g, pr_url)
     await pull_request.update()
-    return web.json_response(pull_request.to_json())
+    return web.json_response(await pull_request.to_json())
 
 
 async def add_item(request: web.Request) -> web.Response:

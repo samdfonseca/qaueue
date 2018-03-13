@@ -61,7 +61,8 @@ def item_error(msg: str, item: db.Item) -> dict:
     return slack.attachment({
         'fallback': f'{msg} - {item.url}',
         'color': colors.RED,
-        'title': item.name,
+        'text': item.name,
+        'title': item.url,
         'title_link': item.url,
         'fields': [
             {'title': 'Error', 'value': msg, 'short': False},
@@ -105,7 +106,8 @@ async def _add_pivotal_story(conn: aioredis.Redis, story_url: str, config: Confi
     priority_index = await db.QAueueQueue.add_to_queue(story)
     return slack.attachment({
         'fallback': f'Added to queue: {story.url}',
-        'title': story.name,
+        'text': story.name,
+        'title': story.url,
         'title_link': story.url,
         'fields': [
             slack.attachment_field('Priority', priority_index),
@@ -124,7 +126,8 @@ async def _add_github_pr(conn: aioredis.Redis, pr_url: str, config: Config) -> d
     priority_index = await db.QAueueQueue.add_to_queue(pull_request)
     return slack.attachment({
         'fallback': f'Added to queue: {pull_request.url}',
-        'title': pull_request.name,
+        'text': pull_request.name,
+        'title': pull_request.url,
         'title_link': pull_request.url,
         'fields': [
             slack.attachment_field('Priority', priority_index),
@@ -165,8 +168,12 @@ async def add_item(conn: aioredis.Redis, args: dict, config: Config) -> web.Resp
         pr = await github.get_pull_request(g, item_url)
         item_name = pr.title
     if pivotal.is_pivotal_story_url(item_url):
-        story_id = pivotal.get_story_id_from_url(item_url)
-        story = await pivotal.get_story(story_id, config.PIVOTAL_PROJECT_IDS)
+        if pivotal.is_full_story_url(item_url):
+            project_id, story_id = pivotal.get_project_story_ids_from_full_url(item_url)
+            story = await pivotal.get_story(story_id, [project_id])
+        else:
+            story_id = pivotal.get_story_id_from_url(item_url)
+            story = await pivotal.get_story(story_id, config.PIVOTAL_PROJECT_IDS)
         item_name = story.get('name')
     if item_name is None:
         class UnableToGetItemNameError(Exception):
@@ -360,7 +367,7 @@ async def prioritize_item(conn: aioredis.Redis, args: dict, config: Config) -> w
                     'fallback': f'Item is not queued: {item.item_id}',
                     'color': colors.RED,
                     'text': 'Item is not queued',
-                    'title': item.name,
+                    'title': item.url,
                     'title_link': item.url,
                     'fields': [
                         slack.attachment_field('Status', item.status),

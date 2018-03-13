@@ -2,6 +2,8 @@ import hashlib
 import typing
 from uuid import uuid4
 
+import sys
+
 from qaueue import github
 from qaueue import pivotal
 from qaueue.constants import colors, fields, item_types, statuses
@@ -58,6 +60,12 @@ class UnsupportedKwargError(Exception):
     pass
 
 
+def get_str(val: typing.Union[str, bytes]) -> str:
+    if isinstance(val, bytes):
+        return val.decode(sys.getdefaultencoding())
+    return val
+
+
 class Item(RedisObject):
     _url_validators = [
         (pivotal.is_pivotal_story_url, item_types.PIVOTAL_STORY),
@@ -65,6 +73,8 @@ class Item(RedisObject):
     ]
 
     def __init__(self, **kwargs):
+        for field in filter(lambda f: f in kwargs, fields.values()):
+            kwargs[field] = get_str(kwargs[field])
         self.status = kwargs.get(fields.STATUS)
         self.url = kwargs.get(fields.URL)
         self.name = kwargs.get(fields.NAME)
@@ -77,27 +87,31 @@ class Item(RedisObject):
             raise UnsupportedItemTypeError
 
     @classmethod
-    def is_supported_url(cls, url: str) -> bool:
+    def is_supported_url(cls, url: typing.Union[str, bytes]) -> bool:
+        url = get_str(url)
         for func, _ in cls._url_validators:
             if func(url):
                 return True
         return False
 
     @classmethod
-    def get_item_type(cls, item_url) -> str:
+    def get_item_type(cls, item_url: typing.Union[str, bytes]) -> str:
+        item_url = get_str(item_url)
         for check_url_func, item_type in cls._url_validators:
             if check_url_func(item_url):
                 return item_type
         raise UnsupportedItemTypeError
 
     @classmethod
-    def item_id_from_url(cls, url: str) -> str:
+    def item_id_from_url(cls, url: typing.Union[str, bytes]) -> str:
+        url = get_str(url)
         if cls.is_supported_url(url):
             return hashlib.md5(url.encode()).hexdigest()
         raise UnsupportedItemTypeError
 
     @classmethod
-    async def exists(cls, item_id: str = None, item_url: str = None) -> typing.Optional[bool]:
+    async def exists(cls, item_id: typing.Union[str, bytes] = None, item_url: typing.Union[str, bytes] = None) -> \
+            typing.Optional[bool]:
         if item_id is None and item_url is None:
             return
         if cls.redis is None:
@@ -122,7 +136,10 @@ class Item(RedisObject):
         return await cls.get(item.item_id)
 
     @classmethod
-    async def get(cls, item_id: str = None, item_index: int = None, item_url: str = None):
+    async def get(cls, item_id: typing.Union[str, bytes] = None, item_index: int = None,
+                  item_url: typing.Union[str, bytes] = None):
+        item_id = item_id.decode() if isinstance(item_id, bytes) else item_id
+        item_url = item_url.decode() if isinstance(item_url, bytes) else item_url
         if item_id is None and item_index is None and item_url is None:
             return
         if cls.redis is None:
@@ -164,9 +181,14 @@ class Item(RedisObject):
             await QAueueQueue.remove_from_queue(self)
         await self.redis.delete(self.item_id)
 
-    def to_json(self):
+    async def reload(self):
+        for field, value in (await self.redis.hgetall(self.item_id)).items():
+            setattr(self, field, value)
+        return self
+
+    async def to_json(self):
         item_json = {field: getattr(self, field) for field in fields.values()}
-        item_json['priority'] = self.get_priority()
+        item_json['priority'] = await self.get_priority()
         return item_json
 
 

@@ -69,12 +69,16 @@ def fake_aioredis(request: FixtureRequest, loop: asyncio.BaseEventLoop):
 
 
 @pytest.fixture
-def qaueue_app(request: FixtureRequest, config_loaded_redis: fakeredis.FakeRedis, fake_aioredis: aioredis.Redis,
+def read_only_config(config_loaded_redis: fakeredis.FakeRedis):
+    # noinspection PyTypeChecker
+    return Config(redis_conn=config_loaded_redis, read_only=True)
+
+
+@pytest.fixture
+def qaueue_app(request: FixtureRequest, read_only_config: Config, fake_aioredis: aioredis.Redis,
         loop: asyncio.BaseEventLoop):
     app = web.Application()
-    # noinspection PyTypeChecker
-    config = Config(redis_conn=config_loaded_redis, read_only=True)
-    app['config'] = config
+    app['config'] = read_only_config
     app['redis'] = fake_aioredis
     setup_routes(app)
     return app
