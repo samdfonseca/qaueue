@@ -227,6 +227,9 @@ class QAueueQueue(RedisObject):
 
     @classmethod
     async def prioritize(cls, item: Item, priority: int, force: bool = False):
+        item_original_priority = await item.get_priority()
+        if priority == item_original_priority:
+            return
         if item.status != statuses.INITIAL and force is not True:
             raise InvalidItemStatusError(f'Item cannot be prioritized since status is not \'queued\': {item.item_id}')
         tr: aioredis.commands.MultiExec = cls.redis.multi_exec()
@@ -247,7 +250,10 @@ class QAueueQueue(RedisObject):
             futs.append(tr.lrem(cls.key, 0, item.item_id))
             futs.append(tr.lpush(cls.key, item.item_id))
         if priority >= 1:
-            after_item_id = await cls.redis.lindex(cls.key, priority)
+            after_item_index = priority
+            if after_item_index < item_original_priority:
+                after_item_index -= 1
+            after_item_id = await cls.redis.lindex(cls.key, after_item_index)
             if after_item_id != item.item_id:
                 futs.append(tr.lrem(cls.key, 0, item.item_id))
                 futs.append(tr.linsert(cls.key, after_item_id, item.item_id))

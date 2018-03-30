@@ -259,18 +259,115 @@ async def test_list_item_with_updated_undefined_status(qaueue_command: QaueueCom
                            resp_json['attachments'][0]['fields'])))
 
 
-async def test_reprioritize_item_to_first(qaueue_command: QaueueCommandClient,
-                                          mock_get_story: typing.Callable[[int], dict]):
-    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 3)]
+async def test_reprioritize_middle_item_to_current(qaueue_command: QaueueCommandClient,
+                                                 mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command(f'prioritize 2 2')
+    for original_item_index, expected_priority in enumerate([0, 1, 2, 3]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_middle_item_to_first(qaueue_command: QaueueCommandClient,
+                                                 mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
     items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
     resp_json = await qaueue_command(f'prioritize 2 0')
-    for i, priority in enumerate([1, 2, 0]):
-        item = await items[i].reload()
-        assert (await item.get_priority()) == priority
+    for original_item_index, expected_priority in enumerate([1, 2, 0, 3]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_middle_item_to_middle(qaueue_command: QaueueCommandClient,
+                                                  mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command(f'prioritize 2 1')
+    for original_item_index, expected_priority in enumerate([0, 2, 1, 3]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_middle_item_to_last(qaueue_command: QaueueCommandClient,
+                                                mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command(f'prioritize 2 3')
+    for original_item_index, expected_priority in enumerate([0, 1, 3, 2]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_first_item_to_first(qaueue_command: QaueueCommandClient,
+                                                   mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command(f'prioritize 0 0')
+    for original_item_index, expected_priority in enumerate([0, 1, 2, 3]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_first_item_to_middle(qaueue_command: QaueueCommandClient,
+                                                 mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    item_ids = [item.item_id for item in items]
     resp_json = await qaueue_command('prioritize 0 2')
-    for i, priority in enumerate([0, 1, 2]):
-        item = await items[i].reload()
-        assert (await item.get_priority()) == priority
+    for original_item_id, expected_priority in enumerate([2, 0, 1, 3]):
+        item = await items[original_item_id].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_first_item_to_last(qaueue_command: QaueueCommandClient,
+                                               mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command('prioritize 0 3')
+    for original_item_id, expected_priority in enumerate([3, 0, 1, 2]):
+        item = await items[original_item_id].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_last_item_to_last(qaueue_command: QaueueCommandClient,
+                                                mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command(f'prioritize 3 3')
+    for original_item_index, expected_priority in enumerate([0, 1, 2, 3]):
+        item = await items[original_item_index].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_last_item_to_first(qaueue_command: QaueueCommandClient,
+                                               mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command('prioritize 3 0')
+    for original_item_id, expected_priority in enumerate([1, 2, 3, 0]):
+        item = await items[original_item_id].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
+
+
+async def test_reprioritize_last_item_to_middle(qaueue_command: QaueueCommandClient,
+                                                mock_get_story: typing.Callable[[int], dict]):
+    mock_stories = [mock_get_story(fake_pivotal_story()[1]) for _ in range(0, 4)]
+    items = [(await db.Item.create(url=story['url'], name=story['name'])) for story in mock_stories]
+    resp_json = await qaueue_command('prioritize 3 1')
+    for original_item_id, expected_priority in enumerate([0, 2, 3, 1]):
+        item = await items[original_item_id].reload()
+        actual_priority = await item.get_priority()
+        assert actual_priority == expected_priority
 
 
 async def test_update_item_status(qaueue_command: QaueueCommandClient, read_only_config: Config,
