@@ -75,6 +75,7 @@ async def _get_story(project_id: PivotalId, story_id: PivotalId) -> typing.Optio
     }
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
+            print(f'story {story_id} in project {project_id} return status code {resp.status}')
             if resp.status >= 300:
                 return None
             return await resp.json()
