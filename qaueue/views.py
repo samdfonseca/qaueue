@@ -263,10 +263,14 @@ async def get_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
     }))
 
 
-async def _complete_item(item: db.Item):
+async def _complete_item(item: db.Item) -> typing.Optional[Exception]:
     if item.type == item_types.PIVOTAL_STORY:
-        label = await pivotal.add_rc_label_to_story(item.url)
-    await db.QAueueQueue.remove_from_queue(item)
+        try:
+            label = await pivotal.add_rc_label_to_story(item.url)
+        except Exception as e:
+            return e
+        finally:
+            await db.QAueueQueue.remove_from_queue(item)
 
 
 @qaueue_command('update')
@@ -306,13 +310,30 @@ async def set_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
             ],
         }))
     item.status = new_status
+    error = None
     if new_status == statuses.COMPLETED:
-        await _complete_item(item)
+        error = await _complete_item(item)
     await item.update()
     item = await db.Item.get(item_id=item.item_id)
+    if error is not None:
+        return json_resp(slack.message_body(args, **{
+            'text': 'Set Item Status',
+            'attachments': [
+                slack.attachment({
+                    'color': colors.RED,
+                    'text': 'Unable to tag Pivotal story',
+                    'fields': [
+                        slack.attachment_field('Error', str(error), short=False),
+                    ],
+                }),
+                await slack.render_item_as_attachment(item, color=colors.GREEN),
+            ],
+        }))
     return json_resp(slack.message_body(args, **{
         'text': 'Set Item Status',
-        'attachments': [await slack.render_item_as_attachment(item, color=colors.GREEN)],
+        'attachments': [
+            await slack.render_item_as_attachment(item, color=colors.GREEN),
+        ],
     }))
 
 
