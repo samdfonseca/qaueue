@@ -24,7 +24,7 @@ USAGE = '''
 QAueue: /qaueue manages the items in the QA pipeline
 
 Usage:
-    /qaueue [-q] add <item>
+    /qaueue [-q] [-v] add <item>
     /qaueue [-v] help [<help_command>]
     /qaueue [-v] list
     /qaueue [-v] prioritize <prioritize_item_id> <priority_index>
