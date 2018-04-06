@@ -24,13 +24,13 @@ USAGE = '''
 QAueue: /qaueue manages the items in the QA pipeline
 
 Usage:
-    /qaueue [-q] [-v] add <item>
+    /qaueue [-qv] add <item>
     /qaueue [-v] help [<help_command>]
     /qaueue [-v] list
     /qaueue [-v] prioritize <prioritize_item_id> <priority_index>
     /qaueue [-v] remove <remove_item_id>
     /qaueue [-v] status <status_item_id>
-    /qaueue [-v] update <update_item_id> <status>
+    /qaueue [-qv] update <update_item_id> <status>
 
 Options:
     -v    Make the output of the command visible to the channel
