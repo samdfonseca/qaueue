@@ -233,6 +233,38 @@ async def test_update_to_undefined_status(qaueue_command: QaueueCommandClient, r
     assert resp_json['attachments'][0]['color'] == colors.GREEN
 
 
+async def test_update_to_released_status_no_v_flag(qaueue_command: QaueueCommandClient, read_only_config: Config,
+                                                   mock_get_story: typing.Callable[[int], dict],
+                                                   mock_add_label_to_story):
+    '''
+    tests that the response_type for 'update X released' is 'in_channel' when '-v' flag is excluded
+    '''
+    url, story_id = fake_pivotal_story()
+    mock_story = mock_get_story(story_id)
+    item = await db.Item.create(url=url, name=mock_story['name'])
+    new_status = 'released'
+    resp_json = await qaueue_command(f'update 0 {new_status}')
+    await item.reload()
+    assert item.status == new_status
+    assert resp_json['response_type'] == 'in_channel'
+
+
+async def test_update_to_released_status_with_v_flag(qaueue_command: QaueueCommandClient, read_only_config: Config,
+                                                     mock_get_story: typing.Callable[[int], dict],
+                                                     mock_add_label_to_story):
+    '''
+    tests that the response_type for 'update X released' is 'in_channel' when '-v' flag is included
+    '''
+    url, story_id = fake_pivotal_story()
+    mock_story = mock_get_story(story_id)
+    item = await db.Item.create(url=url, name=mock_story['name'])
+    new_status = 'released'
+    resp_json = await qaueue_command(f'update 0 {new_status}')
+    await item.reload()
+    assert item.status == new_status
+    assert resp_json['response_type'] == 'in_channel'
+
+
 async def test_list_item_with_updated_defined_status(qaueue_command: QaueueCommandClient, read_only_config: Config,
                                                      mock_get_story: typing.Callable[[int], dict]):
     url, story_id = fake_pivotal_story()
