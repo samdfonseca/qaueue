@@ -312,8 +312,6 @@ async def set_item_status(conn: aioredis.Redis, args: dict, config: Config) -> w
     item.status = new_status
     error = None
     if new_status == statuses.COMPLETED:
-        # override the '-v' flag arg when new_status is the completed status ('released')
-        args['-v'] = True
         error = await _complete_item(item)
     await item.update()
     item = await db.Item.get(item_id=item.item_id)
