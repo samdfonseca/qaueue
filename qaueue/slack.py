@@ -11,8 +11,8 @@ from aioredis import Redis
 
 def message_body(args: dict = None, **kwargs) -> dict:
     defaults = {}
-    if args.get('add', False):
-        # Special case, `/qaueue add` has 'response_type' set to 'in_channel' by default
+    if args.get('add', False) or args.get('update', False):
+        # Special cases, `/qaueue (add|update)` have 'response_type' set to 'in_channel' by default
         # and 'ephemeral' only if the `-q` flag is used
         is_quiet = args.get('-q', False)
         if is_quiet:
