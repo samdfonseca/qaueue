@@ -81,10 +81,10 @@ class Item(RedisObject):
         self.released_at = kwargs.get(fields.RELEASED_AT)
         self.item_id = kwargs.get(fields.ITEM_ID, self.item_id_from_url(self.url))
         if not self.is_supported_url(self.url):
-            raise UnsupportedItemTypeError
+            raise UnsupportedItemTypeError(f'URL: {self.url}')
         self.type = kwargs.get(fields.TYPE, self.get_item_type(self.url))
         if self.type not in item_types.values():
-            raise UnsupportedItemTypeError
+            raise UnsupportedItemTypeError(f'URL: {self.url} - TYPE: {self.type}')
 
     @classmethod
     def is_supported_url(cls, url: typing.Union[str, bytes]) -> bool:
@@ -100,14 +100,14 @@ class Item(RedisObject):
         for check_url_func, item_type in cls._url_validators:
             if check_url_func(item_url):
                 return item_type
-        raise UnsupportedItemTypeError
+        raise UnsupportedItemTypeError(f'URL: {item_url}')
 
     @classmethod
     def item_id_from_url(cls, url: typing.Union[str, bytes]) -> str:
         url = get_str(url)
         if cls.is_supported_url(url):
             return hashlib.md5(url.encode()).hexdigest()
-        raise UnsupportedItemTypeError
+        raise UnsupportedItemTypeError(f'URL: {url}')
 
     @classmethod
     async def exists(cls, item_id: typing.Union[str, bytes] = None, item_url: typing.Union[str, bytes] = None) -> \
