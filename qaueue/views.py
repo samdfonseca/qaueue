@@ -435,6 +435,10 @@ async def index(request: web.Request):
         if config.channel_command_enabled(channel_name, cmd):
             return await func()
         return channel_command_not_enabled(args, channel_name, cmd, config.get_channels_command_enabled(cmd))
-    except:
-        request.app['raven_client'].captureException()
+    except Exception as e:
+        raven_client = request.app['raven_client']
+        if raven_client is not None:
+            raven_client.captureException()
+        else:
+            raise e
 
