@@ -6,6 +6,8 @@ from qaueue.routes import setup_routes
 
 from aiohttp import web
 from dotenv import load_dotenv, find_dotenv
+from raven import Client
+from raven_aiohttp import AioHttpTransport
 
 
 app = web.Application()
@@ -27,6 +29,9 @@ def init_func(argv):
     load_dotenv(dotenv_path)
     app = web.Application()
     app['config'] = Config(read_only=False)
+    app['raven_client'] = Client(
+        'https://186ad0a1fa6d450e86c376878d6cc792:f350f112dd374057940781f06381b4c8@sentry.axialmarket.com/36',
+        transport=AioHttpTransport)
     app.middlewares.append(auth_middleware)
     app.on_startup.append(init_redis)
     app.on_cleanup.append(close_redis)
