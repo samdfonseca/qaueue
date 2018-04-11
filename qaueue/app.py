@@ -29,9 +29,11 @@ def init_func(argv):
     load_dotenv(dotenv_path)
     app = web.Application()
     app['config'] = Config(read_only=False)
-    app['raven_client'] = Client(
-        'https://186ad0a1fa6d450e86c376878d6cc792:f350f112dd374057940781f06381b4c8@sentry.axialmarket.com/36',
-        transport=AioHttpTransport)
+    sentry_dsn = os.environ.get('SENTRY_DSN')
+    if sentry_dsn is not None:
+        app['raven_client'] = Client(sentry_dsn, transport=AioHttpTransport)
+    else:
+        app['raven_client'] = None
     app.middlewares.append(auth_middleware)
     app.on_startup.append(init_redis)
     app.on_cleanup.append(close_redis)
