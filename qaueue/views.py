@@ -1,5 +1,3 @@
-import asyncio
-from datetime import datetime
 import hashlib
 import json
 import re
@@ -433,7 +431,10 @@ async def index(request: web.Request):
             break
     else:
         cmd, func = commands.default()
-    if config.channel_command_enabled(channel_name, cmd):
-        return await func()
-    return channel_command_not_enabled(args, channel_name, cmd, config.get_channels_command_enabled(cmd))
+    try:
+        if config.channel_command_enabled(channel_name, cmd):
+            return await func()
+        return channel_command_not_enabled(args, channel_name, cmd, config.get_channels_command_enabled(cmd))
+    except:
+        request.app['raven_client'].captureException()
 

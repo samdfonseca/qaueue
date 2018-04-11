@@ -20,8 +20,11 @@ class RedisObject(object):
 
 
 class UnsupportedItemTypeError(Exception):
-    def __init__(self):
-        super().__init__('Unsupported item type: must be either a Pivotal story URL or GitHub PR URL')
+    def __init__(self, msg: str = None):
+        full_msg = 'Unsupported item type: must be either a Pivotal story URL or GitHub PR URL'
+        if msg is not None:
+            full_msg += f'. {msg}'
+        super().__init__(full_msg)
 
 
 class ItemAlreadyExistsError(Exception):
